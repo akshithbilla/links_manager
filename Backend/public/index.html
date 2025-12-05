@@ -1,57 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>QuickLink Vault</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div class="app">
-      <h1>QuickLink Vault</h1>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickLink Vault | Professional Link Manager</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1><i class="fas fa-link"></i> QuickLink Vault</h1>
+                <p>Manage and organize your important links professionally</p>
+            </div>
+            <div class="stats-card">
+                <div class="stat">
+                    <span class="stat-value" id="total-links">0</span>
+                    <span class="stat-label">Total Links</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="copied-count">0</span>
+                    <span class="stat-label">Copied</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="edited-count">0</span>
+                    <span class="stat-label">Edited</span>
+                </div>
+            </div>
+        </header>
 
-      <form id="link-form">
-        <div class="field">
-          <label for="name">Label</label>
-          <input
-            type="text"
-            id="name"
-            placeholder="e.g. Portfolio, GitHub, LinkedIn"
-            required
-          />
-        </div>
+        <!-- Add/Edit Link Form -->
+        <section class="form-container">
+            <h2 class="form-title" id="form-title">
+                <i class="fas fa-plus-circle"></i> Add New Link
+            </h2>
+            <form id="link-form" class="link-form">
+                <div class="form-field">
+                    <label for="name"><i class="fas fa-tag"></i> Label</label>
+                    <input 
+                        type="text" 
+                        id="name" 
+                        class="form-input"
+                        placeholder="e.g. Portfolio, GitHub, LinkedIn" 
+                        required 
+                    />
+                </div>
 
-        <div class="field">
-          <label for="url">URL</label>
-          <input
-            type="url"
-            id="url"
-            placeholder="https://example.com"
-            required
-          />
-        </div>
+                <div class="form-field">
+                    <label for="url"><i class="fas fa-link"></i> URL</label>
+                    <input 
+                        type="url" 
+                        id="url" 
+                        class="form-input"
+                        placeholder="https://example.com" 
+                        required 
+                    />
+                </div>
 
-        <button type="submit" id="save-btn">Save Link</button>
-        <button type="button" id="cancel-edit-btn" class="secondary hidden">
-          Cancel Edit
-        </button>
-      </form>
+                <div class="form-actions">
+                    <button type="submit" id="save-btn" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Link
+                    </button>
+                    <button type="button" id="cancel-edit-btn" class="btn btn-secondary hidden">
+                        <i class="fas fa-times"></i> Cancel Edit
+                    </button>
+                </div>
+            </form>
+        </section>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Label</th>
-            <th>URL</th>
-            <th>Copy</th>
-            <th>Edit</th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody id="links-table-body">
-          <!-- rows injected by JS -->
-        </tbody>
-      </table>
+        <!-- Links Table -->
+        <section class="table-container">
+            <div class="table-header">
+                <h2><i class="fas fa-list"></i> Saved Links</h2>
+                <div class="table-controls">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" class="search-input" placeholder="Search links..." id="search-input">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-wrapper">
+                <table class="links-table">
+                    <thead>
+                        <tr>
+                            <th>Label</th>
+                            <th>URL</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="links-table-body">
+                        <!-- Empty state initially -->
+                        <tr id="empty-row">
+                            <td colspan="4" class="empty-state">
+                                <i class="fas fa-link"></i>
+                                <h3>No links saved yet</h3>
+                                <p>Add your first link using the form above</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>QuickLink Vault &copy; <span id="current-year">2023</span> | Professional Link Management</p>
+        </footer>
     </div>
 
     <script src="script.js"></script>
-  </body>
+</body>
 </html>
