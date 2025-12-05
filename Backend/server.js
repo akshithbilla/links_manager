@@ -30,39 +30,17 @@ const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/quicklinks'
 
 console.log('🔗 Attempting MongoDB connection...');
 
-mongoose.connect(mongoURI)
-.then(() => {
-    console.log('✅ MongoDB Connected successfully');
-    console.log('📊 Database:', mongoose.connection.name);
-})
-.catch(err => {
-    console.error('❌ MongoDB connection error:', err.message);
-    process.exit(1);
-});
 
-// Folder Schema
-const folderSchema = new mongoose.Schema({
-    name: { 
-        type: String, 
-        required: true,
-        trim: true
-    },
-    description: {
-        type: String,
-        trim: true,
-        default: ''
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now
-    }
-});
+mongoose
+  .connect(process.env.MONGO_URI)   // no extra options needed
+  .then(() => {
+    console.log("✅ MongoDB connected successfully");
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err.message);
+  });
 
-// Link Schema
+// Simple Link Schema
 const linkSchema = new mongoose.Schema({
     name: { 
         type: String, 
@@ -74,23 +52,28 @@ const linkSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    folder: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Folder',
-        required: true
-    },
     createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
         type: Date,
         default: Date.now
     }
 });
 
-const Folder = mongoose.model('Folder', folderSchema);
 const Link = mongoose.model('Link', linkSchema);
+
+// Root endpoint
+app.get('/', (req, res) => {
+    res.json({
+        message: 'QuickLink Vault API',
+        version: '1.0.0',
+        endpoints: {
+            health: '/api/health',
+            links: '/api/links',
+            documentation: 'See README for API usage'
+        },
+        frontend: 'https://aks-manager-links.vercel.app',
+        backend: 'https://links-manager-ph6d.onrender.com'
+    });
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -100,126 +83,29 @@ app.get('/api/health', (req, res) => {
         status: 'OK', 
         message: 'QuickLink API is running',
         mongodb: mongoStatus,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        endpoints: [
+            'GET /api/links',
+            'POST /api/links',
+            'PUT /api/links/:id',
+            'DELETE /api/links/:id'
+        ]
     });
 });
 
-// GET all folders with their links
-app.get('/api/folders', async (req, res) => {
+// GET all links
+app.get('/api/links', async (req, res) => {
     try {
-        const folders = await Folder.find().sort({ createdAt: -1 });
+        console.log(`📥 ${req.method} ${req.path} from ${req.headers.origin || 'unknown origin'}`);
         
-        // Get links for each folder
-        const foldersWithLinks = await Promise.all(
-            folders.map(async (folder) => {
-                const links = await Link.find({ folder: folder._id }).sort({ createdAt: -1 });
-                return {
-                    ...folder.toObject(),
-                    links
-                };
-            })
-        );
+        const links = await Link.find().sort({ createdAt: -1 });
+        console.log(`✅ Found ${links.length} links`);
         
-        res.json(foldersWithLinks);
+        res.json(links);
     } catch (err) {
-        console.error('❌ Error fetching folders:', err.message);
+        console.error('❌ Error fetching links:', err.message);
         res.status(500).json({ 
-            error: 'Failed to fetch folders',
-            message: err.message 
-        });
-    }
-});
-
-// POST create folder
-app.post('/api/folders', async (req, res) => {
-    try {
-        const { name, description } = req.body;
-        
-        if (!name || !name.trim()) {
-            return res.status(400).json({ error: 'Folder name is required' });
-        }
-        
-        const newFolder = new Folder({
-            name: name.trim(),
-            description: description?.trim() || ''
-        });
-        
-        const savedFolder = await newFolder.save();
-        res.status(201).json(savedFolder);
-    } catch (err) {
-        console.error('❌ Error creating folder:', err.message);
-        res.status(500).json({ 
-            error: 'Failed to create folder',
-            message: err.message 
-        });
-    }
-});
-
-// PUT update folder
-app.put('/api/folders/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name, description } = req.body;
-        
-        if (!name || !name.trim()) {
-            return res.status(400).json({ error: 'Folder name is required' });
-        }
-        
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ error: 'Invalid folder ID format' });
-        }
-        
-        const updated = await Folder.findByIdAndUpdate(
-            id,
-            { 
-                name: name.trim(),
-                description: description?.trim() || '',
-                updatedAt: Date.now()
-            },
-            { new: true }
-        );
-        
-        if (!updated) {
-            return res.status(404).json({ error: 'Folder not found' });
-        }
-        
-        res.json(updated);
-    } catch (err) {
-        console.error('❌ Error updating folder:', err.message);
-        res.status(500).json({ 
-            error: 'Failed to update folder',
-            message: err.message 
-        });
-    }
-});
-
-// DELETE folder
-app.delete('/api/folders/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ error: 'Invalid folder ID format' });
-        }
-        
-        // Delete all links in the folder first
-        await Link.deleteMany({ folder: id });
-        
-        // Then delete the folder
-        const deleted = await Folder.findByIdAndDelete(id);
-        
-        if (!deleted) {
-            return res.status(404).json({ error: 'Folder not found' });
-        }
-        
-        res.json({ 
-            message: 'Folder and all its links deleted successfully',
-            id: deleted._id 
-        });
-    } catch (err) {
-        console.error('❌ Error deleting folder:', err.message);
-        res.status(500).json({ 
-            error: 'Failed to delete folder',
+            error: 'Failed to fetch links',
             message: err.message 
         });
     }
@@ -228,21 +114,21 @@ app.delete('/api/folders/:id', async (req, res) => {
 // POST create link
 app.post('/api/links', async (req, res) => {
     try {
-        const { name, url, folderId } = req.body;
+        console.log(`📝 ${req.method} ${req.path} - Creating new link`);
+        console.log('Request body:', req.body);
         
+        const { name, url } = req.body;
+        
+        // Basic validation
         if (!name || !name.trim()) {
-            return res.status(400).json({ error: 'Link name is required' });
+            return res.status(400).json({ error: 'Name is required' });
         }
         
         if (!url || !url.trim()) {
             return res.status(400).json({ error: 'URL is required' });
         }
         
-        if (!folderId) {
-            return res.status(400).json({ error: 'Folder ID is required' });
-        }
-        
-        // Format URL
+        // Add https:// if missing
         let formattedUrl = url.trim();
         if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
             formattedUrl = 'https://' + formattedUrl;
@@ -250,11 +136,12 @@ app.post('/api/links', async (req, res) => {
         
         const newLink = new Link({
             name: name.trim(),
-            url: formattedUrl,
-            folder: folderId
+            url: formattedUrl
         });
         
         const savedLink = await newLink.save();
+        console.log('✅ Link created with ID:', savedLink._id);
+        
         res.status(201).json(savedLink);
     } catch (err) {
         console.error('❌ Error creating link:', err.message);
@@ -268,6 +155,8 @@ app.post('/api/links', async (req, res) => {
 // PUT update link
 app.put('/api/links/:id', async (req, res) => {
     try {
+        console.log(`🔄 ${req.method} ${req.path} - Updating link`);
+        
         const { id } = req.params;
         const { name, url } = req.body;
         
@@ -275,22 +164,22 @@ app.put('/api/links/:id', async (req, res) => {
             return res.status(400).json({ error: 'Name and URL are required' });
         }
         
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ error: 'Invalid link ID format' });
-        }
-        
-        // Format URL
+        // Add https:// if missing
         let formattedUrl = url.trim();
         if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
             formattedUrl = 'https://' + formattedUrl;
+        }
+        
+        // Validate MongoDB ID format
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ error: 'Invalid link ID format' });
         }
         
         const updated = await Link.findByIdAndUpdate(
             id,
             { 
                 name: name.trim(),
-                url: formattedUrl,
-                updatedAt: Date.now()
+                url: formattedUrl
             },
             { new: true }
         );
@@ -299,6 +188,7 @@ app.put('/api/links/:id', async (req, res) => {
             return res.status(404).json({ error: 'Link not found' });
         }
         
+        console.log('✅ Link updated:', updated._id);
         res.json(updated);
     } catch (err) {
         console.error('❌ Error updating link:', err.message);
@@ -309,11 +199,14 @@ app.put('/api/links/:id', async (req, res) => {
     }
 });
 
-// DELETE link
+// DELETE remove link
 app.delete('/api/links/:id', async (req, res) => {
     try {
+        console.log(`🗑️ ${req.method} ${req.path} - Deleting link`);
+        
         const { id } = req.params;
         
+        // Validate MongoDB ID format
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({ error: 'Invalid link ID format' });
         }
@@ -324,6 +217,7 @@ app.delete('/api/links/:id', async (req, res) => {
             return res.status(404).json({ error: 'Link not found' });
         }
         
+        console.log('✅ Link deleted:', deleted._id);
         res.json({ 
             message: 'Link deleted successfully',
             id: deleted._id 
@@ -337,32 +231,28 @@ app.delete('/api/links/:id', async (req, res) => {
     }
 });
 
-// Root endpoint
-app.get('/', (req, res) => {
-    res.json({
-        message: 'QuickLink Vault API with Folders',
-        version: '2.0.0',
-        endpoints: {
-            health: '/api/health',
-            folders: '/api/folders',
-            links: '/api/links'
-        }
-    });
-});
-
-// 404 handler
+// 404 handler for undefined routes
 app.use((req, res) => {
     res.status(404).json({
         error: 'Endpoint not found',
+        path: req.path,
+        method: req.method,
         availableEndpoints: [
-            'GET /api/folders',
-            'POST /api/folders',
-            'PUT /api/folders/:id',
-            'DELETE /api/folders/:id',
+            'GET /api/links',
             'POST /api/links',
             'PUT /api/links/:id',
-            'DELETE /api/links/:id'
+            'DELETE /api/links/:id',
+            'GET /api/health'
         ]
+    });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('🔥 Server error:', err);
+    res.status(500).json({ 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
     });
 });
 
@@ -370,5 +260,9 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📁 API Base URL: http://localhost:${PORT}/api`);
+    console.log(`🌐 Local: http://localhost:${PORT}`);
+    console.log(`🔗 Frontend: https://aks-manager-links.vercel.app`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`📁 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`⚡ API Base URL: https://links-manager-ph6d.onrender.com`);
 });

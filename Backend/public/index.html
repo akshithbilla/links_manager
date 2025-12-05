@@ -11,192 +11,105 @@
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
-            <div class="logo-container">
-                <div class="logo-icon">
-                    <i class="fas fa-folder-tree"></i>
-                </div>
-                <div class="logo-text">
-                    <h1>QuickLink Vault</h1>
-                    <p>Organize your professional links efficiently</p>
-                </div>
+            <div class="header-left">
+                <h1><i class="fas fa-link"></i> QuickLink Vault</h1>
+                <p>Manage and organize your important links professionally</p>
             </div>
-            
-            <div class="stats-container">
-                <div class="stat-box">
-                    <div class="stat-icon">
-                        <i class="fas fa-folder"></i>
-                    </div>
-                    <div class="stat-details">
-                        <span class="stat-value" id="total-folders">0</span>
-                        <span class="stat-label">Folders</span>
-                    </div>
+            <div class="stats-card">
+                <div class="stat">
+                    <span class="stat-value" id="total-links">0</span>
+                    <span class="stat-label">Total Links</span>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-icon">
-                        <i class="fas fa-link"></i>
-                    </div>
-                    <div class="stat-details">
-                        <span class="stat-value" id="total-links">0</span>
-                        <span class="stat-label">Links</span>
-                    </div>
+                <div class="stat">
+                    <span class="stat-value" id="copied-count">0</span>
+                    <span class="stat-label">Copied</span>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-icon">
-                        <i class="fas fa-copy"></i>
-                    </div>
-                    <div class="stat-details">
-                        <span class="stat-value" id="copied-count">0</span>
-                        <span class="stat-label">Copied</span>
-                    </div>
+                <div class="stat">
+                    <span class="stat-value" id="edited-count">0</span>
+                    <span class="stat-label">Edited</span>
                 </div>
             </div>
         </header>
 
-        <!-- Main Content Area -->
-        <div class="main-content">
-            <!-- Left Sidebar - Forms -->
-            <div class="sidebar">
-                <!-- Folder Creation Card -->
-                <div class="form-card">
-                    <div class="form-card-header">
-                        <i class="fas fa-folder-plus"></i>
-                        <h3>Create New Folder</h3>
-                    </div>
-                    <form id="folder-form" class="compact-form">
-                        <div class="form-group">
-                            <label for="folder-name" class="form-label">
-                                <i class="fas fa-tag"></i> Folder Name
-                            </label>
-                            <input 
-                                type="text" 
-                                id="folder-name" 
-                                class="form-input"
-                                placeholder="e.g. Social Media, Projects, Work, Personal" 
-                                required 
-                            />
-                        </div>
-
-                        <div class="form-group">
-                            <label for="folder-description" class="form-label">
-                                <i class="fas fa-align-left"></i> Description (Optional)
-                            </label>
-                            <input 
-                                type="text" 
-                                id="folder-description" 
-                                class="form-input"
-                                placeholder="Brief description of this folder" 
-                            />
-                        </div>
-
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary btn-block">
-                                <i class="fas fa-plus"></i> Create Folder
-                            </button>
-                        </div>
-                    </form>
+        <!-- Add/Edit Link Form -->
+        <section class="form-container">
+            <h2 class="form-title" id="form-title">
+                <i class="fas fa-plus-circle"></i> Add New Link
+            </h2>
+            <form id="link-form" class="link-form">
+                <div class="form-field">
+                    <label for="name"><i class="fas fa-tag"></i> Label</label>
+                    <input 
+                        type="text" 
+                        id="name" 
+                        class="form-input"
+                        placeholder="e.g. Portfolio, GitHub, LinkedIn" 
+                        required 
+                    />
                 </div>
 
-                <!-- Link Creation Card (Initially Hidden) -->
-                <div class="form-card link-form-container hidden">
-                    <div class="form-card-header">
-                        <i class="fas fa-link"></i>
-                        <h3 id="link-form-title">Add Link to <span id="current-folder-name">Folder</span></h3>
-                    </div>
-                    <form id="link-form" class="compact-form">
-                        <div class="form-group">
-                            <label for="link-name" class="form-label">
-                                <i class="fas fa-tag"></i> Link Label
-                            </label>
-                            <input 
-                                type="text" 
-                                id="link-name" 
-                                class="form-input"
-                                placeholder="e.g. Portfolio, GitHub, LinkedIn" 
-                                required 
-                            />
-                        </div>
-
-                        <div class="form-group">
-                            <label for="link-url" class="form-label">
-                                <i class="fas fa-link"></i> URL
-                            </label>
-                            <input 
-                                type="url" 
-                                id="link-url" 
-                                class="form-input"
-                                placeholder="https://example.com" 
-                                required 
-                            />
-                        </div>
-
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> Add Link
-                            </button>
-                            <button type="button" id="cancel-link-btn" class="btn btn-secondary">
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Right Content - Folders List -->
-            <div class="content-area">
-                <!-- Search and Controls -->
-                <div class="content-header">
-                    <div class="header-title">
-                        <i class="fas fa-folder"></i>
-                        <h2>Your Folders</h2>
-                        <span class="badge" id="folders-count">0</span>
-                    </div>
-                    
-                    <div class="header-controls">
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" 
-                                   class="search-input" 
-                                   placeholder="Search folders..." 
-                                   id="folder-search-input">
-                        </div>
-                    </div>
+                <div class="form-field">
+                    <label for="url"><i class="fas fa-link"></i> URL</label>
+                    <input 
+                        type="url" 
+                        id="url" 
+                        class="form-input"
+                        placeholder="https://example.com" 
+                        required 
+                    />
                 </div>
 
-                <!-- Folders Grid -->
-                <div class="folders-grid" id="folders-container">
-                    <!-- Folders will be dynamically added here -->
-                    <div class="empty-state">
-                        <div class="empty-icon">
-                            <i class="fas fa-folder-open"></i>
-                        </div>
-                        <h3>No folders yet</h3>
-                        <p>Create your first folder to start organizing links</p>
-                        <button class="btn btn-primary btn-icon" id="create-first-folder">
-                            <i class="fas fa-plus"></i> Create Folder
-                        </button>
+                <div class="form-actions">
+                    <button type="submit" id="save-btn" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Link
+                    </button>
+                    <button type="button" id="cancel-edit-btn" class="btn btn-secondary hidden">
+                        <i class="fas fa-times"></i> Cancel Edit
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Links Table -->
+        <section class="table-container">
+            <div class="table-header">
+                <h2><i class="fas fa-list"></i> Saved Links</h2>
+                <div class="table-controls">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" class="search-input" placeholder="Search links..." id="search-input">
                     </div>
                 </div>
             </div>
-        </div>
+            
+            <div class="table-wrapper">
+                <table class="links-table">
+                    <thead>
+                        <tr>
+                            <th>Label</th>
+                            <th>URL</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="links-table-body">
+                        <!-- Empty state initially -->
+                        <tr id="empty-row">
+                            <td colspan="4" class="empty-state">
+                                <i class="fas fa-link"></i>
+                                <h3>No links saved yet</h3>
+                                <p>Add your first link using the form above</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
         <!-- Footer -->
         <footer class="app-footer">
-            <div class="footer-content">
-                <p>QuickLink Vault &copy; <span id="current-year">2023</span></p>
-                <div class="footer-links">
-                    <span>Organized Link Management</span>
-                </div>
-            </div>
+            <p>QuickLink Vault &copy; <span id="current-year">2023</span> | Professional Link Management</p>
         </footer>
-    </div>
-
-    <!-- Modals (unchanged) -->
-    <div class="modal hidden" id="folder-modal">
-        <!-- ... same as before ... -->
-    </div>
-
-    <div class="modal hidden" id="link-modal">
-        <!-- ... same as before ... -->
     </div>
 
     <script src="script.js"></script>
