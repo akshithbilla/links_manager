@@ -13,7 +13,6 @@ const totalLinksEl = document.getElementById('total-links');
 const copiedCountEl = document.getElementById('copied-count');
 const editedCountEl = document.getElementById('edited-count');
 const currentYearEl = document.getElementById('current-year');
-const tableContainer = document.querySelector('.table-container');
 
 let editingId = null;
 let allLinks = [];
@@ -24,6 +23,7 @@ let editedCount = 0;
 window.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 QuickLink Vault Frontend Initializing...');
     console.log('🌐 Backend URL:', API_BASE);
+    console.log('🔗 Frontend URL:', window.location.origin);
     
     currentYearEl.textContent = new Date().getFullYear();
     
@@ -63,11 +63,14 @@ async function initializeApp() {
 // Check backend health
 async function checkBackendHealth() {
     try {
-        // Try the main endpoint with timeout
+        // Try the health endpoint first
+        const healthUrl = 'https://links-manager-ph6d.onrender.com/api/health';
+        console.log('Checking backend health at:', healthUrl);
+        
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        const response = await fetch(API_BASE, {
+        const response = await fetch(healthUrl, {
             signal: controller.signal,
             method: 'GET',
             headers: { 'Accept': 'application/json' },
@@ -76,7 +79,13 @@ async function checkBackendHealth() {
         
         clearTimeout(timeoutId);
         
-        return response.ok;
+        if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Backend health check passed:', data);
+            return true;
+        }
+        
+        return false;
         
     } catch (error) {
         console.warn('Backend health check failed:', error.message);
@@ -104,7 +113,9 @@ async function fetchLinks() {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
+            const errorText = await response.text();
+            console.error('Server response:', errorText);
+            throw new Error(`Server error: ${response.status} ${response.statusText}`);
         }
         
         allLinks = await response.json();

@@ -5,32 +5,21 @@ require('dotenv').config();
 
 const app = express();
 
-// Allowed origins - add your frontend URL
-const allowedOrigins = [
-    'https://aks-manager-links.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:5000'
-];
-
 // CORS configuration
-app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        
-        if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
-        }
-        return callback(null, true);
-    },
+const corsOptions = {
+    origin: [
+        'https://aks-manager-links.vercel.app',
+        'http://localhost:3000',
+        'http://localhost:5000',
+        'http://localhost:8080'
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
+};
 
-// Handle preflight requests
-app.options('*', cors());
+// Apply CORS middleware
+app.use(cors(corsOptions));
 
 // Middleware
 app.use(express.json());
@@ -39,17 +28,17 @@ app.use(express.urlencoded({ extended: true }));
 // MongoDB connection
 const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/quicklinks';
 
-mongoose.connect(mongoURI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
-})
-.then(() => console.log('✅ MongoDB Connected successfully to:', mongoURI.split('@')[1] || mongoURI))
-.catch(err => {
-    console.error('❌ MongoDB connection error:', err.message);
-    console.log('Please check your MongoDB connection string in the .env file');
-});
+console.log('🔗 Attempting MongoDB connection...');
+
+
+mongoose
+  .connect(process.env.MONGO_URI)   // no extra options needed
+  .then(() => {
+    console.log("✅ MongoDB connected successfully");
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err.message);
+  });
 
 // Simple Link Schema
 const linkSchema = new mongoose.Schema({
@@ -70,6 +59,21 @@ const linkSchema = new mongoose.Schema({
 });
 
 const Link = mongoose.model('Link', linkSchema);
+
+// Root endpoint
+app.get('/', (req, res) => {
+    res.json({
+        message: 'QuickLink Vault API',
+        version: '1.0.0',
+        endpoints: {
+            health: '/api/health',
+            links: '/api/links',
+            documentation: 'See README for API usage'
+        },
+        frontend: 'https://aks-manager-links.vercel.app',
+        backend: 'https://links-manager-ph6d.onrender.com'
+    });
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -166,6 +170,11 @@ app.put('/api/links/:id', async (req, res) => {
             formattedUrl = 'https://' + formattedUrl;
         }
         
+        // Validate MongoDB ID format
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ error: 'Invalid link ID format' });
+        }
+        
         const updated = await Link.findByIdAndUpdate(
             id,
             { 
@@ -183,11 +192,6 @@ app.put('/api/links/:id', async (req, res) => {
         res.json(updated);
     } catch (err) {
         console.error('❌ Error updating link:', err.message);
-        
-        if (err.name === 'CastError') {
-            return res.status(400).json({ error: 'Invalid link ID format' });
-        }
-        
         res.status(500).json({ 
             error: 'Failed to update link',
             message: err.message 
@@ -201,6 +205,12 @@ app.delete('/api/links/:id', async (req, res) => {
         console.log(`🗑️ ${req.method} ${req.path} - Deleting link`);
         
         const { id } = req.params;
+        
+        // Validate MongoDB ID format
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ error: 'Invalid link ID format' });
+        }
+        
         const deleted = await Link.findByIdAndDelete(id);
         
         if (!deleted) {
@@ -214,11 +224,6 @@ app.delete('/api/links/:id', async (req, res) => {
         });
     } catch (err) {
         console.error('❌ Error deleting link:', err.message);
-        
-        if (err.name === 'CastError') {
-            return res.status(400).json({ error: 'Invalid link ID format' });
-        }
-        
         res.status(500).json({ 
             error: 'Failed to delete link',
             message: err.message 
@@ -226,27 +231,19 @@ app.delete('/api/links/:id', async (req, res) => {
     }
 });
 
-// Root endpoint
-app.get('/', (req, res) => {
-    res.json({
-        message: 'QuickLink Vault API',
-        version: '1.0.0',
-        endpoints: {
-            health: '/api/health',
-            links: '/api/links',
-            documentation: 'See README for API usage'
-        },
-        frontend: 'https://aks-manager-links.vercel.app'
-    });
-});
-
-// 404 handler
+// 404 handler for undefined routes
 app.use((req, res) => {
     res.status(404).json({
         error: 'Endpoint not found',
         path: req.path,
         method: req.method,
-        availableEndpoints: ['GET /api/links', 'POST /api/links', 'PUT /api/links/:id', 'DELETE /api/links/:id']
+        availableEndpoints: [
+            'GET /api/links',
+            'POST /api/links',
+            'PUT /api/links/:id',
+            'DELETE /api/links/:id',
+            'GET /api/health'
+        ]
     });
 });
 
@@ -266,4 +263,6 @@ app.listen(PORT, () => {
     console.log(`🌐 Local: http://localhost:${PORT}`);
     console.log(`🔗 Frontend: https://aks-manager-links.vercel.app`);
     console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`📁 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`⚡ API Base URL: https://links-manager-ph6d.onrender.com`);
 });
