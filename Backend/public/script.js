@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:5000/api/links";
+const API_BASE = "https://links-manager-ph6d.onrender.com/api/links";
 
 // DOM Elements
 const form = document.getElementById("link-form");
