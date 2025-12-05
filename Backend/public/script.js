@@ -13,6 +13,7 @@ const totalLinksEl = document.getElementById('total-links');
 const copiedCountEl = document.getElementById('copied-count');
 const editedCountEl = document.getElementById('edited-count');
 const currentYearEl = document.getElementById('current-year');
+const tableContainer = document.querySelector('.table-container');
 
 let editingId = null;
 let allLinks = [];
@@ -21,6 +22,9 @@ let editedCount = 0;
 
 // Load links on page load
 window.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 QuickLink Vault Frontend Initializing...');
+    console.log('🌐 Backend URL:', API_BASE);
+    
     currentYearEl.textContent = new Date().getFullYear();
     
     // Load stats from localStorage
@@ -29,42 +33,176 @@ window.addEventListener('DOMContentLoaded', () => {
     copiedCountEl.textContent = copiedCount;
     editedCountEl.textContent = editedCount;
     
-    fetchLinks();
+    // Show loading state
+    showTableLoading();
+    
+    // Initialize the app
+    initializeApp();
 });
+
+// Initialize the application
+async function initializeApp() {
+    try {
+        // Check if backend is accessible
+        const isBackendAlive = await checkBackendHealth();
+        
+        if (isBackendAlive) {
+            console.log('✅ Backend is accessible');
+            await fetchLinks();
+        } else {
+            console.error('❌ Backend is not accessible');
+            showTableError('Backend server is not responding. Please check the connection.');
+        }
+        
+    } catch (error) {
+        console.error('Initialization error:', error);
+        showTableError('Failed to initialize application. Please refresh the page.');
+    }
+}
+
+// Check backend health
+async function checkBackendHealth() {
+    try {
+        // Try the main endpoint with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(API_BASE, {
+            signal: controller.signal,
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            mode: 'cors'
+        });
+        
+        clearTimeout(timeoutId);
+        
+        return response.ok;
+        
+    } catch (error) {
+        console.warn('Backend health check failed:', error.message);
+        return false;
+    }
+}
 
 // Fetch all links from API
 async function fetchLinks() {
     try {
-        showLoading(true);
-        const res = await fetch(API_BASE);
+        showTableLoading();
         
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch(API_BASE, {
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            mode: 'cors'
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
         }
         
-        allLinks = await res.json();
+        allLinks = await response.json();
+        console.log(`✅ Loaded ${allLinks.length} links`);
+        
         renderLinks(allLinks);
         updateStats();
-        showLoading(false);
+        
+        if (allLinks.length === 0) {
+            showEmptyState();
+        }
+        
     } catch (error) {
-        console.error('Error fetching links:', error);
-        showToast('Error loading links. Please check your connection.', 'error');
-        showLoading(false);
+        console.error('❌ Error fetching links:', error);
+        
+        if (error.name === 'AbortError') {
+            showTableError('Request timeout. Server is taking too long to respond.');
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            showTableError('Cannot connect to server. Please check your internet connection.');
+        } else if (error.message.includes('CORS')) {
+            showTableError('CORS error. Please check backend configuration.');
+        } else {
+            showTableError(`Error loading links: ${error.message}`);
+        }
     }
+}
+
+// Show loading state in table
+function showTableLoading() {
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="4" class="loading-state">
+                <div class="spinner-container">
+                    <div class="loading-spinner"></div>
+                    <p>Loading links...</p>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    // Disable search while loading
+    if (searchInput) {
+        searchInput.disabled = true;
+        searchInput.placeholder = 'Loading...';
+    }
+}
+
+// Show error state in table
+function showTableError(message) {
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="4" class="error-state">
+                <div class="error-container">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Connection Error</h3>
+                    <p>${message}</p>
+                    <button class="btn btn-secondary" id="retry-btn">
+                        <i class="fas fa-redo"></i> Retry
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    // Add retry button event listener
+    const retryBtn = document.getElementById('retry-btn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+            showTableLoading();
+            initializeApp();
+        });
+    }
+    
+    // Enable search with disabled state
+    if (searchInput) {
+        searchInput.disabled = false;
+        searchInput.placeholder = 'Search links...';
+        searchInput.value = '';
+    }
+}
+
+// Show empty state in table
+function showEmptyState() {
+    tableBody.innerHTML = `
+        <tr id="empty-row">
+            <td colspan="4" class="empty-state">
+                <i class="fas fa-link"></i>
+                <h3>No links saved yet</h3>
+                <p>Add your first link using the form above</p>
+            </td>
+        </tr>
+    `;
 }
 
 // Render links to table
 function renderLinks(links) {
     if (!links || links.length === 0) {
-        tableBody.innerHTML = `
-            <tr id="empty-row">
-                <td colspan="4" class="empty-state">
-                    <i class="fas fa-link"></i>
-                    <h3>No links saved yet</h3>
-                    <p>Add your first link using the form above</p>
-                </td>
-            </tr>
-        `;
+        showEmptyState();
         return;
     }
     
@@ -74,35 +212,37 @@ function renderLinks(links) {
         const tr = document.createElement('tr');
         tr.classList.add('fade-in');
         
-        const createdDate = new Date(link.createdAt).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
+        const createdDate = link.createdAt 
+            ? new Date(link.createdAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            })
+            : 'N/A';
         
         tr.innerHTML = `
             <td>
                 <div class="link-label">
                     <i class="${getDomainIcon(link.url)}"></i>
-                    ${link.name}
+                    ${escapeHtml(link.name)}
                 </div>
             </td>
             <td>
-                <a href="${link.url}" target="_blank" class="link-url">
+                <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="link-url" title="${link.url}">
                     <i class="fas fa-external-link-alt"></i>
-                    ${link.url}
+                    ${truncateText(link.url, 35)}
                 </a>
             </td>
             <td class="time-cell">${createdDate}</td>
             <td>
                 <div class="actions-cell">
-                    <button class="action-btn copy-btn" data-id="${link._id}">
+                    <button class="action-btn copy-btn" data-id="${link._id}" title="Copy URL">
                         <i class="fas fa-copy"></i> Copy
                     </button>
-                    <button class="action-btn edit-btn" data-id="${link._id}">
+                    <button class="action-btn edit-btn" data-id="${link._id}" title="Edit link">
                         <i class="fas fa-edit"></i> Edit
                     </button>
-                    <button class="action-btn delete-btn" data-id="${link._id}">
+                    <button class="action-btn delete-btn" data-id="${link._id}" title="Delete link">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </div>
@@ -112,24 +252,47 @@ function renderLinks(links) {
         tableBody.appendChild(tr);
     });
     
+    // Enable search
+    if (searchInput) {
+        searchInput.disabled = false;
+        searchInput.placeholder = 'Search links...';
+    }
+    
     // Add event listeners to action buttons
     addActionListeners();
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Helper function to truncate long text
+function truncateText(text, maxLength) {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
 }
 
 // Get appropriate icon based on URL domain
 function getDomainIcon(url) {
     if (!url) return 'fas fa-link';
     
-    if (url.includes('github.com')) return 'fab fa-github';
-    if (url.includes('linkedin.com')) return 'fab fa-linkedin';
-    if (url.includes('twitter.com') || url.includes('x.com')) return 'fab fa-twitter';
-    if (url.includes('youtube.com')) return 'fab fa-youtube';
-    if (url.includes('facebook.com')) return 'fab fa-facebook';
-    if (url.includes('instagram.com')) return 'fab fa-instagram';
-    if (url.includes('dribbble.com')) return 'fab fa-dribbble';
-    if (url.includes('behance.net')) return 'fab fa-behance';
-    if (url.includes('stackoverflow.com')) return 'fab fa-stack-overflow';
-    if (url.includes('reddit.com')) return 'fab fa-reddit';
+    const urlStr = url.toLowerCase();
+    
+    if (urlStr.includes('github.com')) return 'fab fa-github';
+    if (urlStr.includes('linkedin.com')) return 'fab fa-linkedin';
+    if (urlStr.includes('twitter.com') || urlStr.includes('x.com')) return 'fab fa-twitter';
+    if (urlStr.includes('youtube.com')) return 'fab fa-youtube';
+    if (urlStr.includes('facebook.com')) return 'fab fa-facebook';
+    if (urlStr.includes('instagram.com')) return 'fab fa-instagram';
+    if (urlStr.includes('dribbble.com')) return 'fab fa-dribbble';
+    if (urlStr.includes('behance.net')) return 'fab fa-behance';
+    if (urlStr.includes('stackoverflow.com')) return 'fab fa-stack-overflow';
+    if (urlStr.includes('reddit.com')) return 'fab fa-reddit';
+    if (urlStr.includes('codepen.io')) return 'fab fa-codepen';
     return 'fas fa-link';
 }
 
@@ -172,43 +335,68 @@ form.addEventListener('submit', async (e) => {
         return;
     }
     
-    // Validate URL format
-    if (!isValidUrl(url)) {
-        showToast('Please enter a valid URL starting with http:// or https://', 'error');
+    // Format URL if missing protocol
+    let formattedUrl = url;
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = 'https://' + formattedUrl;
+    }
+    
+    // Validate URL
+    if (!isValidUrl(formattedUrl)) {
+        showToast('Please enter a valid URL (e.g., https://example.com)', 'error');
         return;
     }
     
-    const payload = { name, url };
+    const payload = { 
+        name: name,
+        url: formattedUrl
+    };
     
     try {
         showLoading(true);
         
+        let response;
+        
         if (editingId) {
             // Update existing link
-            const res = await fetch(`${API_BASE}/${editingId}`, {
+            console.log(`🔄 Updating link ${editingId}`, payload);
+            
+            response = await fetch(`${API_BASE}/${editingId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify(payload)
             });
             
-            if (!res.ok) throw new Error('Update failed');
-            
-            editedCount++;
-            editedCountEl.textContent = editedCount;
-            localStorage.setItem('editedCount', editedCount);
-            
-            showToast('Link updated successfully!', 'success');
+            if (response.ok) {
+                editedCount++;
+                editedCountEl.textContent = editedCount;
+                localStorage.setItem('editedCount', editedCount);
+                showToast('✅ Link updated successfully!', 'success');
+            }
         } else {
             // Create new link
-            const res = await fetch(API_BASE, {
+            console.log('📝 Creating new link', payload);
+            
+            response = await fetch(API_BASE, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify(payload)
             });
             
-            if (!res.ok) throw new Error('Create failed');
-            
-            showToast('Link added successfully!', 'success');
+            if (response.ok) {
+                showToast('✅ Link added successfully!', 'success');
+            }
+        }
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Request failed with status ${response.status}: ${errorText}`);
         }
         
         // Reset form and refresh list
@@ -217,7 +405,13 @@ form.addEventListener('submit', async (e) => {
         
     } catch (error) {
         console.error('Error saving link:', error);
-        showToast('Error saving link. Please try again.', 'error');
+        
+        if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+            showToast('Cannot connect to server. Please try again later.', 'error');
+        } else {
+            showToast(`Error: ${error.message}`, 'error');
+        }
+        
         showLoading(false);
     }
 });
@@ -226,40 +420,67 @@ form.addEventListener('submit', async (e) => {
 async function handleCopy(id) {
     try {
         const link = allLinks.find(l => l._id === id);
-        if (!link) return;
+        if (!link) {
+            showToast('Link not found', 'error');
+            return;
+        }
         
         await navigator.clipboard.writeText(link.url);
         
         // Visual feedback
         const copyBtn = document.querySelector(`.copy-btn[data-id="${id}"]`);
-        const originalHTML = copyBtn.innerHTML;
-        copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-        copyBtn.style.background = 'var(--success)';
-        copyBtn.style.color = 'white';
+        if (copyBtn) {
+            const originalHTML = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            copyBtn.style.background = 'var(--success)';
+            copyBtn.style.color = 'white';
+            
+            // Revert button after 1.5 seconds
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHTML;
+                copyBtn.style.background = '';
+                copyBtn.style.color = '';
+            }, 1500);
+        }
         
         // Update counter
         copiedCount++;
         copiedCountEl.textContent = copiedCount;
         localStorage.setItem('copiedCount', copiedCount);
         
-        // Revert button after 1.5 seconds
-        setTimeout(() => {
-            copyBtn.innerHTML = originalHTML;
-            copyBtn.style.background = '';
-            copyBtn.style.color = '';
-        }, 1500);
-        
-        showToast('Link copied to clipboard!', 'success');
+        showToast('📋 Link copied to clipboard!', 'success');
     } catch (error) {
         console.error('Copy failed:', error);
-        showToast('Failed to copy. Please try again.', 'error');
+        
+        // Fallback for older browsers
+        const link = allLinks.find(l => l._id === id);
+        if (link) {
+            const textArea = document.createElement('textarea');
+            textArea.value = link.url;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            showToast('📋 Link copied to clipboard!', 'success');
+            
+            // Update counter
+            copiedCount++;
+            copiedCountEl.textContent = copiedCount;
+            localStorage.setItem('copiedCount', copiedCount);
+        } else {
+            showToast('Failed to copy link', 'error');
+        }
     }
 }
 
 // Start editing a link
-async function startEdit(id) {
+function startEdit(id) {
     const link = allLinks.find(l => l._id === id);
-    if (!link) return;
+    if (!link) {
+        showToast('Link not found', 'error');
+        return;
+    }
     
     editingId = id;
     nameInput.value = link.name;
@@ -271,7 +492,10 @@ async function startEdit(id) {
     formTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Link';
     
     // Scroll to form
-    document.querySelector('.form-container').scrollIntoView({ behavior: 'smooth' });
+    document.querySelector('.form-container').scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+    });
     
     // Focus on name input
     nameInput.focus();
@@ -280,25 +504,45 @@ async function startEdit(id) {
 // Delete a link
 async function deleteLink(id) {
     const link = allLinks.find(l => l._id === id);
-    if (!link) return;
+    if (!link) {
+        showToast('Link not found', 'error');
+        return;
+    }
     
-    if (!confirm(`Are you sure you want to delete "${link.name}"?`)) return;
+    if (!confirm(`Are you sure you want to delete "${link.name}"?`)) {
+        return;
+    }
     
     try {
         showLoading(true);
         
-        const res = await fetch(`${API_BASE}/${id}`, {
-            method: 'DELETE'
+        console.log(`🗑️ Deleting link ${id}`);
+        
+        const response = await fetch(`${API_BASE}/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
         });
         
-        if (!res.ok) throw new Error('Delete failed');
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Delete failed: ${response.status} ${errorText}`);
+        }
         
-        showToast('Link deleted successfully!', 'success');
+        showToast('🗑️ Link deleted successfully!', 'success');
         await fetchLinks();
         
     } catch (error) {
         console.error('Error deleting link:', error);
-        showToast('Error deleting link. Please try again.', 'error');
+        
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            showToast('Cannot connect to server. Please try again later.', 'error');
+        } else {
+            showToast(`Error: ${error.message}`, 'error');
+        }
+        
         showLoading(false);
     }
 }
@@ -341,8 +585,8 @@ function updateStats() {
 // Validate URL format
 function isValidUrl(string) {
     try {
-        const url = new URL(string);
-        return url.protocol === 'http:' || url.protocol === 'https:';
+        new URL(string);
+        return true;
     } catch (_) {
         return false;
     }
@@ -359,17 +603,25 @@ function showToast(message, type = 'success') {
     // Create new toast
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    
+    // Set icon based on type
+    let icon = 'check-circle';
+    if (type === 'error') icon = 'exclamation-circle';
+    if (type === 'warning') icon = 'exclamation-triangle';
+    if (type === 'info') icon = 'info-circle';
+    
     toast.innerHTML = `
-        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-        ${message}
+        <i class="fas fa-${icon}"></i>
+        <span>${message}</span>
     `;
     
     document.body.appendChild(toast);
     
-    // Show toast
+    // Show toast with animation
     setTimeout(() => toast.classList.add('show'), 10);
     
-    // Hide after 3 seconds
+    // Hide after appropriate time
+    const duration = type === 'error' ? 5000 : 3000;
     setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => {
@@ -377,19 +629,142 @@ function showToast(message, type = 'success') {
                 toast.parentNode.removeChild(toast);
             }
         }, 300);
-    }, 3000);
+    }, duration);
 }
 
-// Show/hide loading state
+// Show/hide loading state for form actions
 function showLoading(isLoading) {
     const buttons = document.querySelectorAll('.btn, .action-btn');
     const inputs = document.querySelectorAll('.form-input, .search-input');
+    const submitBtn = document.getElementById('save-btn');
     
     if (isLoading) {
-        buttons.forEach(btn => btn.classList.add('loading'));
-        inputs.forEach(input => input.setAttribute('disabled', 'true'));
+        // Show loading state on submit button
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        submitBtn.disabled = true;
+        
+        // Disable other interactive elements
+        buttons.forEach(btn => {
+            if (btn !== submitBtn) {
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+                btn.style.cursor = 'not-allowed';
+            }
+        });
+        
+        inputs.forEach(input => {
+            input.disabled = true;
+            input.style.opacity = '0.6';
+            input.style.cursor = 'not-allowed';
+        });
+        
     } else {
-        buttons.forEach(btn => btn.classList.remove('loading'));
-        inputs.forEach(input => input.removeAttribute('disabled'));
+        // Restore submit button
+        if (editingId) {
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> Update Link';
+        } else {
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Link';
+        }
+        submitBtn.disabled = false;
+        
+        // Enable other interactive elements
+        buttons.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '';
+            btn.style.cursor = '';
+        });
+        
+        inputs.forEach(input => {
+            input.disabled = false;
+            input.style.opacity = '';
+            input.style.cursor = '';
+        });
     }
 }
+
+// Add CSS for loading states
+const style = document.createElement('style');
+style.textContent = `
+    /* Loading spinner for table */
+    .loading-state {
+        padding: 60px 20px !important;
+        text-align: center;
+    }
+    
+    .spinner-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+    
+    .loading-spinner {
+        border: 4px solid rgba(79, 70, 229, 0.1);
+        border-radius: 50%;
+        border-top: 4px solid var(--primary);
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+    }
+    
+    .loading-state p {
+        color: var(--text-light);
+        font-size: 1rem;
+        margin: 0;
+    }
+    
+    /* Error state */
+    .error-state {
+        padding: 60px 20px !important;
+        text-align: center;
+    }
+    
+    .error-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    
+    .error-container i {
+        font-size: 3rem;
+        color: var(--warning);
+        margin-bottom: 10px;
+    }
+    
+    .error-container h3 {
+        color: var(--text);
+        font-size: 1.3rem;
+        margin: 0;
+    }
+    
+    .error-container p {
+        color: var(--text-light);
+        margin: 0 0 20px 0;
+        line-height: 1.5;
+    }
+    
+    /* Spinner animation */
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .fa-spinner {
+        animation: fa-spin 1s linear infinite;
+    }
+    
+    @keyframes fa-spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Disabled search */
+    .search-input:disabled {
+        background-color: var(--surface);
+        cursor: not-allowed;
+    }
+`;
+document.head.appendChild(style);
