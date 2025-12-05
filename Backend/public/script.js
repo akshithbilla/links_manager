@@ -1,39 +1,47 @@
-const API_BASE = "https://links-manager-ph6d.onrender.com/api/links";
+const API_BASE = "https://links-manager-ph6d.onrender.com/api";
 
 // DOM Elements
-const form = document.getElementById("link-form");
-const nameInput = document.getElementById("name");
-const urlInput = document.getElementById("url");
-const tableBody = document.getElementById("links-table-body");
-const saveBtn = document.getElementById("save-btn");
-const cancelEditBtn = document.getElementById("cancel-edit-btn");
-const formTitle = document.getElementById("form-title");
-const searchInput = document.getElementById("search-input");
+const folderForm = document.getElementById("folder-form");
+const folderNameInput = document.getElementById("folder-name");
+const folderDescInput = document.getElementById("folder-description");
+const linkForm = document.getElementById("link-form");
+const linkNameInput = document.getElementById("link-name");
+const linkUrlInput = document.getElementById("link-url");
+const linkFormContainer = document.querySelector(".link-form-container");
+const currentFolderNameSpan = document.getElementById("current-folder-name");
+const foldersContainer = document.getElementById("folders-container");
+const searchInput = document.getElementById("folder-search-input");
+const totalFoldersEl = document.getElementById('total-folders');
 const totalLinksEl = document.getElementById('total-links');
 const copiedCountEl = document.getElementById('copied-count');
-const editedCountEl = document.getElementById('edited-count');
 const currentYearEl = document.getElementById('current-year');
+const cancelLinkBtn = document.getElementById("cancel-link-btn");
 
-let editingId = null;
-let allLinks = [];
+// Modals
+const folderModal = document.getElementById("folder-modal");
+const linkModal = document.getElementById("link-modal");
+const closeFolderModal = document.getElementById("close-folder-modal");
+const closeLinkModal = document.getElementById("close-link-modal");
+const cancelEditFolderBtn = document.getElementById("cancel-edit-folder");
+const cancelEditLinkBtn = document.getElementById("cancel-edit-link");
+const editFolderForm = document.getElementById("edit-folder-form");
+const editLinkForm = document.getElementById("edit-link-form");
+
+let currentFolderId = null;
+let allFolders = [];
 let copiedCount = 0;
-let editedCount = 0;
+let currentEditFolderId = null;
+let currentEditLinkId = null;
 
-// Load links on page load
+// Load on page load
 window.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 QuickLink Vault Frontend Initializing...');
-    console.log('🌐 Backend URL:', API_BASE);
+    console.log('🚀 QuickLink Vault with Folders Initializing...');
     
     currentYearEl.textContent = new Date().getFullYear();
     
     // Load stats from localStorage
     copiedCount = parseInt(localStorage.getItem('copiedCount')) || 0;
-    editedCount = parseInt(localStorage.getItem('editedCount')) || 0;
     copiedCountEl.textContent = copiedCount;
-    editedCountEl.textContent = editedCount;
-    
-    // Show loading state
-    showTableLoading();
     
     // Initialize the app
     initializeApp();
@@ -47,26 +55,25 @@ async function initializeApp() {
         
         if (isBackendAlive) {
             console.log('✅ Backend is accessible');
-            await fetchLinks();
+            await fetchFolders();
         } else {
             console.error('❌ Backend is not accessible');
-            showTableError('Backend server is not responding. Please check the connection.');
+            showErrorState('Backend server is not responding. Please check the connection.');
         }
         
     } catch (error) {
         console.error('Initialization error:', error);
-        showTableError('Failed to initialize application. Please refresh the page.');
+        showErrorState('Failed to initialize application. Please refresh the page.');
     }
 }
 
 // Check backend health
 async function checkBackendHealth() {
     try {
-        // Try the main endpoint with timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        const response = await fetch(API_BASE, {
+        const response = await fetch(`${API_BASE}/health`, {
             signal: controller.signal,
             method: 'GET',
             headers: { 'Accept': 'application/json' },
@@ -74,7 +81,6 @@ async function checkBackendHealth() {
         });
         
         clearTimeout(timeoutId);
-        
         return response.ok;
         
     } catch (error) {
@@ -83,199 +89,771 @@ async function checkBackendHealth() {
     }
 }
 
-// Fetch all links from API
-async function fetchLinks() {
+// Fetch all folders with their links
+async function fetchFolders() {
     try {
-        showTableLoading();
+        showLoadingState();
         
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
-        const response = await fetch(API_BASE, {
-            signal: controller.signal,
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
+        const response = await fetch(`${API_BASE}/folders`, {
+            headers: { 'Accept': 'application/json' },
             mode: 'cors'
         });
-        
-        clearTimeout(timeoutId);
         
         if (!response.ok) {
             throw new Error(`Server error: ${response.status}`);
         }
         
-        allLinks = await response.json();
-        console.log(`✅ Loaded ${allLinks.length} links`);
+        allFolders = await response.json();
+        console.log(`✅ Loaded ${allFolders.length} folders`);
         
-        renderLinks(allLinks);
+        renderFolders();
         updateStats();
         
-        if (allLinks.length === 0) {
+        if (allFolders.length === 0) {
             showEmptyState();
         }
         
     } catch (error) {
-        console.error('❌ Error fetching links:', error);
-        
-        if (error.name === 'AbortError') {
-            showTableError('Request timeout. Server is taking too long to respond.');
-        } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            showTableError('Cannot connect to server. Please check your internet connection.');
-        } else if (error.message.includes('CORS')) {
-            showTableError('CORS error. Please check backend configuration.');
-        } else {
-            showTableError(`Error loading links: ${error.message}`);
-        }
+        console.error('❌ Error fetching folders:', error);
+        showErrorState('Cannot load folders. Please try again.');
     }
 }
 
-// Show loading state in table
-function showTableLoading() {
-    tableBody.innerHTML = `
-        <tr>
-            <td colspan="4" class="loading-state">
-                <div class="spinner-container">
-                    <div class="loading-spinner"></div>
-                    <p>Loading links...</p>
-                </div>
-            </td>
-        </tr>
+// Show loading state
+function showLoadingState() {
+    foldersContainer.innerHTML = `
+        <div class="loading-state">
+            <div class="spinner-container">
+                <div class="loading-spinner"></div>
+                <p>Loading folders...</p>
+            </div>
+        </div>
     `;
-    
-    // Disable search while loading
-    if (searchInput) {
-        searchInput.disabled = true;
-        searchInput.placeholder = 'Loading...';
-    }
 }
 
-// Show error state in table
-function showTableError(message) {
-    tableBody.innerHTML = `
-        <tr>
-            <td colspan="4" class="error-state">
-                <div class="error-container">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Connection Error</h3>
-                    <p>${message}</p>
-                    <button class="btn btn-secondary" id="retry-btn">
-                        <i class="fas fa-redo"></i> Retry
-                    </button>
-                </div>
-            </td>
-        </tr>
+// Show error state
+function showErrorState(message) {
+    foldersContainer.innerHTML = `
+        <div class="error-state">
+            <div class="error-container">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Connection Error</h3>
+                <p>${message}</p>
+                <button class="btn btn-secondary" id="retry-btn">
+                    <i class="fas fa-redo"></i> Retry
+                </button>
+            </div>
+        </div>
     `;
     
-    // Add retry button event listener
     const retryBtn = document.getElementById('retry-btn');
     if (retryBtn) {
         retryBtn.addEventListener('click', () => {
-            showTableLoading();
+            showLoadingState();
             initializeApp();
         });
     }
-    
-    // Enable search with disabled state
-    if (searchInput) {
-        searchInput.disabled = false;
-        searchInput.placeholder = 'Search links...';
-        searchInput.value = '';
-    }
 }
 
-// Show empty state in table
+// Show empty state
 function showEmptyState() {
-    tableBody.innerHTML = `
-        <tr id="empty-row">
-            <td colspan="4" class="empty-state">
-                <i class="fas fa-link"></i>
-                <h3>No links saved yet</h3>
-                <p>Add your first link using the form above</p>
-            </td>
-        </tr>
+    foldersContainer.innerHTML = `
+        <div class="empty-state">
+            <i class="fas fa-folder-open"></i>
+            <h3>No folders yet</h3>
+            <p>Create your first folder to start organizing links!</p>
+        </div>
     `;
 }
 
-// Render links to table
-function renderLinks(links) {
-    if (!links || links.length === 0) {
+// Render folders to the grid
+function renderFolders() {
+    if (!allFolders || allFolders.length === 0) {
         showEmptyState();
         return;
     }
     
-    tableBody.innerHTML = '';
+    foldersContainer.innerHTML = '';
     
-    links.forEach((link) => {
-        const tr = document.createElement('tr');
-        tr.classList.add('fade-in');
+    allFolders.forEach((folder) => {
+        const folderCard = document.createElement('div');
+        folderCard.className = 'folder-card';
+        folderCard.dataset.folderId = folder._id;
         
-        const createdDate = link.createdAt 
-            ? new Date(link.createdAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            })
-            : 'N/A';
+        const isExpanded = folder._id === currentFolderId;
+        if (isExpanded) {
+            folderCard.classList.add('expanded');
+        }
         
-        tr.innerHTML = `
-            <td>
-                <div class="link-label">
-                    <i class="${getDomainIcon(link.url)}"></i>
-                    ${escapeHtml(link.name)}
+        folderCard.innerHTML = `
+            <div class="folder-header">
+                <div class="folder-info">
+                    <div class="folder-icon">
+                        <i class="fas fa-folder"></i>
+                    </div>
+                    <div class="folder-details">
+                        <h3>${escapeHtml(folder.name)}</h3>
+                        <p>${folder.description || 'No description'}</p>
+                    </div>
                 </div>
-            </td>
-            <td>
-                <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="link-url" title="${link.url}">
-                    <i class="fas fa-external-link-alt"></i>
-                    ${truncateText(link.url, 35)}
-                </a>
-            </td>
-            <td class="time-cell">${createdDate}</td>
-            <td>
-                <div class="actions-cell">
-                    <button class="action-btn copy-btn" data-id="${link._id}" title="Copy URL">
-                        <i class="fas fa-copy"></i> Copy
-                    </button>
-                    <button class="action-btn edit-btn" data-id="${link._id}" title="Edit link">
-                        <i class="fas fa-edit"></i> Edit
-                    </button>
-                    <button class="action-btn delete-btn" data-id="${link._id}" title="Delete link">
-                        <i class="fas fa-trash"></i> Delete
-                    </button>
+                <div class="folder-stats">
+                    <span class="folder-count">${folder.links?.length || 0} links</span>
+                    <div class="folder-actions">
+                        <button class="action-btn add-link-btn" data-folder-id="${folder._id}" title="Add link to this folder">
+                            <i class="fas fa-plus"></i> Add Link
+                        </button>
+                        <button class="action-btn edit-folder-btn" data-folder-id="${folder._id}" title="Edit folder">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="action-btn delete-folder-btn" data-folder-id="${folder._id}" title="Delete folder">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
-            </td>
+            </div>
+            <div class="folder-content">
+                ${renderLinksList(folder.links || [], folder._id)}
+            </div>
         `;
         
-        tableBody.appendChild(tr);
+        foldersContainer.appendChild(folderCard);
+        
+        // Add event listeners
+        const folderHeader = folderCard.querySelector('.folder-header');
+        folderHeader.addEventListener('click', (e) => {
+            if (!e.target.closest('.folder-actions')) {
+                toggleFolder(folder._id);
+            }
+        });
     });
     
-    // Enable search
-    if (searchInput) {
-        searchInput.disabled = false;
-        searchInput.placeholder = 'Search links...';
-    }
-    
     // Add event listeners to action buttons
-    addActionListeners();
+    addFolderActionListeners();
 }
 
-// Helper function to escape HTML
+// Render links list for a folder
+function renderLinksList(links, folderId) {
+    if (!links || links.length === 0) {
+        return `
+            <div class="empty-folder">
+                <i class="fas fa-link"></i>
+                <h4>No links in this folder</h4>
+                <p>Add your first link to get started</p>
+                <button class="btn btn-primary add-first-link-btn" data-folder-id="${folderId}">
+                    <i class="fas fa-plus"></i> Add First Link
+                </button>
+            </div>
+        `;
+    }
+    
+    const linksHtml = links.map(link => `
+        <div class="link-item" data-link-id="${link._id}">
+            <div class="link-info">
+                <div class="link-icon">
+                    <i class="${getDomainIcon(link.url)}"></i>
+                </div>
+                <div class="link-text">
+                    <h4>${escapeHtml(link.name)}</h4>
+                    <a href="${link.url}" target="_blank" rel="noopener noreferrer" title="${link.url}">
+                        ${truncateText(link.url, 40)}
+                    </a>
+                </div>
+            </div>
+            <div class="link-actions">
+                <button class="action-btn copy-link-btn" data-link-id="${link._id}" title="Copy URL">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+                <button class="action-btn edit-link-btn" data-link-id="${link._id}" data-folder-id="${folderId}" title="Edit link">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+                <button class="action-btn delete-link-btn" data-link-id="${link._id}" data-folder-id="${folderId}" title="Delete link">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    return `<div class="links-list">${linksHtml}</div>`;
+}
+
+// Toggle folder expansion
+function toggleFolder(folderId) {
+    const folderCard = document.querySelector(`.folder-card[data-folder-id="${folderId}"]`);
+    
+    if (folderCard.classList.contains('expanded')) {
+        folderCard.classList.remove('expanded');
+        currentFolderId = null;
+    } else {
+        // Close all other folders
+        document.querySelectorAll('.folder-card.expanded').forEach(card => {
+            card.classList.remove('expanded');
+        });
+        
+        folderCard.classList.add('expanded');
+        currentFolderId = folderId;
+    }
+}
+
+// Add event listeners to folder action buttons
+function addFolderActionListeners() {
+    // Add link buttons
+    document.querySelectorAll('.add-link-btn, .add-first-link-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const folderId = btn.getAttribute('data-folder-id');
+            showLinkForm(folderId);
+        });
+    });
+    
+    // Edit folder buttons
+    document.querySelectorAll('.edit-folder-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const folderId = btn.getAttribute('data-folder-id');
+            showEditFolderModal(folderId);
+        });
+    });
+    
+    // Delete folder buttons
+    document.querySelectorAll('.delete-folder-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const folderId = btn.getAttribute('data-folder-id');
+            deleteFolder(folderId);
+        });
+    });
+    
+    // Copy link buttons
+    document.querySelectorAll('.copy-link-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const linkId = btn.getAttribute('data-link-id');
+            copyLink(linkId);
+        });
+    });
+    
+    // Edit link buttons
+    document.querySelectorAll('.edit-link-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const linkId = btn.getAttribute('data-link-id');
+            const folderId = btn.getAttribute('data-folder-id');
+            showEditLinkModal(linkId, folderId);
+        });
+    });
+    
+    // Delete link buttons
+    document.querySelectorAll('.delete-link-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const linkId = btn.getAttribute('data-link-id');
+            const folderId = btn.getAttribute('data-folder-id');
+            deleteLink(linkId, folderId);
+        });
+    });
+}
+
+// Show link form for a specific folder
+function showLinkForm(folderId) {
+    const folder = allFolders.find(f => f._id === folderId);
+    if (!folder) return;
+    
+    currentFolderId = folderId;
+    currentFolderNameSpan.textContent = folder.name;
+    
+    // Reset form
+    linkNameInput.value = '';
+    linkUrlInput.value = '';
+    
+    // Show form
+    linkFormContainer.classList.remove('hidden');
+    
+    // Scroll to form
+    linkFormContainer.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+    });
+    
+    // Focus on name input
+    linkNameInput.focus();
+}
+
+// Hide link form
+function hideLinkForm() {
+    linkFormContainer.classList.add('hidden');
+    currentFolderId = null;
+}
+
+// Handle folder creation
+folderForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = folderNameInput.value.trim();
+    const description = folderDescInput.value.trim();
+    
+    if (!name) {
+        showToast('Folder name is required', 'warning');
+        return;
+    }
+    
+    const payload = { 
+        name: name,
+        description: description || ''
+    };
+    
+    try {
+        disableForm(folderForm, true);
+        
+        const response = await fetch(`${API_BASE}/folders`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Request failed: ${errorText}`);
+        }
+        
+        showToast('✅ Folder created successfully!', 'success');
+        folderForm.reset();
+        await fetchFolders();
+        
+    } catch (error) {
+        console.error('Error creating folder:', error);
+        showToast(`Error: ${error.message}`, 'error');
+        
+    } finally {
+        disableForm(folderForm, false);
+    }
+});
+
+// Handle link creation
+linkForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = linkNameInput.value.trim();
+    const url = linkUrlInput.value.trim();
+    
+    if (!name || !url) {
+        showToast('Link name and URL are required', 'warning');
+        return;
+    }
+    
+    // Format URL if missing protocol
+    let formattedUrl = url;
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = 'https://' + formattedUrl;
+    }
+    
+    // Validate URL
+    if (!isValidUrl(formattedUrl)) {
+        showToast('Please enter a valid URL', 'error');
+        return;
+    }
+    
+    const payload = { 
+        name: name,
+        url: formattedUrl,
+        folderId: currentFolderId
+    };
+    
+    try {
+        disableForm(linkForm, true);
+        
+        const response = await fetch(`${API_BASE}/links`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Request failed: ${errorText}`);
+        }
+        
+        showToast('✅ Link added successfully!', 'success');
+        hideLinkForm();
+        await fetchFolders();
+        
+    } catch (error) {
+        console.error('Error creating link:', error);
+        showToast(`Error: ${error.message}`, 'error');
+        
+    } finally {
+        disableForm(linkForm, false);
+    }
+});
+
+// Cancel link form
+cancelLinkBtn.addEventListener('click', hideLinkForm);
+
+// Show edit folder modal
+function showEditFolderModal(folderId) {
+    const folder = allFolders.find(f => f._id === folderId);
+    if (!folder) return;
+    
+    currentEditFolderId = folderId;
+    document.getElementById('edit-folder-name').value = folder.name;
+    document.getElementById('edit-folder-description').value = folder.description || '';
+    
+    folderModal.classList.add('active');
+}
+
+// Hide edit folder modal
+function hideEditFolderModal() {
+    folderModal.classList.remove('active');
+    currentEditFolderId = null;
+}
+
+// Show edit link modal
+function showEditLinkModal(linkId, folderId) {
+    const folder = allFolders.find(f => f._id === folderId);
+    if (!folder) return;
+    
+    const link = folder.links?.find(l => l._id === linkId);
+    if (!link) return;
+    
+    currentEditLinkId = linkId;
+    document.getElementById('edit-link-name').value = link.name;
+    document.getElementById('edit-link-url').value = link.url;
+    
+    linkModal.classList.add('active');
+}
+
+// Hide edit link modal
+function hideEditLinkModal() {
+    linkModal.classList.remove('active');
+    currentEditLinkId = null;
+}
+
+// Handle edit folder form
+editFolderForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById('edit-folder-name').value.trim();
+    const description = document.getElementById('edit-folder-description').value.trim();
+    
+    if (!name) {
+        showToast('Folder name is required', 'warning');
+        return;
+    }
+    
+    const payload = { 
+        name: name,
+        description: description || ''
+    };
+    
+    try {
+        disableForm(editFolderForm, true);
+        
+        const response = await fetch(`${API_BASE}/folders/${currentEditFolderId}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Request failed: ${errorText}`);
+        }
+        
+        showToast('✅ Folder updated successfully!', 'success');
+        hideEditFolderModal();
+        await fetchFolders();
+        
+    } catch (error) {
+        console.error('Error updating folder:', error);
+        showToast(`Error: ${error.message}`, 'error');
+        
+    } finally {
+        disableForm(editFolderForm, false);
+    }
+});
+
+// Handle edit link form
+editLinkForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById('edit-link-name').value.trim();
+    const url = document.getElementById('edit-link-url').value.trim();
+    
+    if (!name || !url) {
+        showToast('Link name and URL are required', 'warning');
+        return;
+    }
+    
+    // Format URL if missing protocol
+    let formattedUrl = url;
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = 'https://' + formattedUrl;
+    }
+    
+    // Validate URL
+    if (!isValidUrl(formattedUrl)) {
+        showToast('Please enter a valid URL', 'error');
+        return;
+    }
+    
+    const payload = { 
+        name: name,
+        url: formattedUrl
+    };
+    
+    try {
+        disableForm(editLinkForm, true);
+        
+        const response = await fetch(`${API_BASE}/links/${currentEditLinkId}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Request failed: ${errorText}`);
+        }
+        
+        showToast('✅ Link updated successfully!', 'success');
+        hideEditLinkModal();
+        await fetchFolders();
+        
+    } catch (error) {
+        console.error('Error updating link:', error);
+        showToast(`Error: ${error.message}`, 'error');
+        
+    } finally {
+        disableForm(editLinkForm, false);
+    }
+});
+
+// Delete folder
+async function deleteFolder(folderId) {
+    const folder = allFolders.find(f => f._id === folderId);
+    if (!folder) return;
+    
+    if (!confirm(`Are you sure you want to delete "${folder.name}" and all its links?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/folders/${folderId}`, {
+            method: 'DELETE',
+            headers: { 'Accept': 'application/json' }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Delete failed: ${errorText}`);
+        }
+        
+        showToast('🗑️ Folder deleted successfully!', 'success');
+        await fetchFolders();
+        
+    } catch (error) {
+        console.error('Error deleting folder:', error);
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Delete link
+async function deleteLink(linkId, folderId) {
+    const folder = allFolders.find(f => f._id === folderId);
+    if (!folder) return;
+    
+    const link = folder.links?.find(l => l._id === linkId);
+    if (!link) return;
+    
+    if (!confirm(`Are you sure you want to delete "${link.name}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/links/${linkId}`, {
+            method: 'DELETE',
+            headers: { 'Accept': 'application/json' }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Delete failed: ${errorText}`);
+        }
+        
+        showToast('🗑️ Link deleted successfully!', 'success');
+        await fetchFolders();
+        
+    } catch (error) {
+        console.error('Error deleting link:', error);
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Copy link to clipboard
+async function copyLink(linkId) {
+    try {
+        // Find the link in all folders
+        let targetLink = null;
+        for (const folder of allFolders) {
+            const link = folder.links?.find(l => l._id === linkId);
+            if (link) {
+                targetLink = link;
+                break;
+            }
+        }
+        
+        if (!targetLink) {
+            showToast('Link not found', 'error');
+            return;
+        }
+        
+        await navigator.clipboard.writeText(targetLink.url);
+        
+        // Visual feedback
+        const copyBtn = document.querySelector(`.copy-link-btn[data-link-id="${linkId}"]`);
+        if (copyBtn) {
+            const originalHTML = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            copyBtn.style.background = 'var(--success)';
+            copyBtn.style.color = 'white';
+            
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHTML;
+                copyBtn.style.background = '';
+                copyBtn.style.color = '';
+            }, 1500);
+        }
+        
+        // Update counter
+        copiedCount++;
+        copiedCountEl.textContent = copiedCount;
+        localStorage.setItem('copiedCount', copiedCount);
+        
+        showToast('📋 Link copied to clipboard!', 'success');
+    } catch (error) {
+        console.error('Copy failed:', error);
+        showToast('Failed to copy link', 'error');
+    }
+}
+
+// Update statistics
+function updateStats() {
+    totalFoldersEl.textContent = allFolders.length;
+    
+    let totalLinks = 0;
+    allFolders.forEach(folder => {
+        totalLinks += folder.links?.length || 0;
+    });
+    totalLinksEl.textContent = totalLinks;
+}
+
+// Search functionality
+searchInput.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase().trim();
+    
+    if (!searchTerm) {
+        renderFolders();
+        return;
+    }
+    
+    const filteredFolders = allFolders.filter(folder => 
+        folder.name.toLowerCase().includes(searchTerm) ||
+        folder.description?.toLowerCase().includes(searchTerm) ||
+        folder.links?.some(link => 
+            link.name.toLowerCase().includes(searchTerm) || 
+            link.url.toLowerCase().includes(searchTerm)
+        )
+    );
+    
+    renderFilteredFolders(filteredFolders);
+});
+
+// Render filtered folders
+function renderFilteredFolders(folders) {
+    if (!folders || folders.length === 0) {
+        foldersContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <h3>No folders found</h3>
+                <p>Try a different search term</p>
+            </div>
+        `;
+        return;
+    }
+    
+    foldersContainer.innerHTML = '';
+    
+    folders.forEach((folder) => {
+        const folderCard = document.createElement('div');
+        folderCard.className = 'folder-card';
+        folderCard.dataset.folderId = folder._id;
+        
+        folderCard.innerHTML = `
+            <div class="folder-header">
+                <div class="folder-info">
+                    <div class="folder-icon">
+                        <i class="fas fa-folder"></i>
+                    </div>
+                    <div class="folder-details">
+                        <h3>${escapeHtml(folder.name)}</h3>
+                        <p>${folder.description || 'No description'}</p>
+                    </div>
+                </div>
+                <div class="folder-stats">
+                    <span class="folder-count">${folder.links?.length || 0} links</span>
+                    <div class="folder-actions">
+                        <button class="action-btn add-link-btn" data-folder-id="${folder._id}" title="Add link to this folder">
+                            <i class="fas fa-plus"></i> Add Link
+                        </button>
+                        <button class="action-btn edit-folder-btn" data-folder-id="${folder._id}" title="Edit folder">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="action-btn delete-folder-btn" data-folder-id="${folder._id}" title="Delete folder">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="folder-content">
+                ${renderLinksList(folder.links || [], folder._id)}
+            </div>
+        `;
+        
+        foldersContainer.appendChild(folderCard);
+        
+        // Add event listeners
+        const folderHeader = folderCard.querySelector('.folder-header');
+        folderHeader.addEventListener('click', (e) => {
+            if (!e.target.closest('.folder-actions')) {
+                toggleFolder(folder._id);
+            }
+        });
+    });
+    
+    addFolderActionListeners();
+}
+
+// Helper functions
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// Helper function to truncate long text
 function truncateText(text, maxLength) {
     if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
 }
 
-// Get appropriate icon based on URL domain
 function getDomainIcon(url) {
     if (!url) return 'fas fa-link';
     
@@ -295,336 +873,6 @@ function getDomainIcon(url) {
     return 'fas fa-link';
 }
 
-// Add event listeners to action buttons
-function addActionListeners() {
-    // Copy buttons
-    document.querySelectorAll('.copy-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const id = this.getAttribute('data-id');
-            handleCopy(id);
-        });
-    });
-    
-    // Edit buttons
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const id = this.getAttribute('data-id');
-            startEdit(id);
-        });
-    });
-    
-    // Delete buttons
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const id = this.getAttribute('data-id');
-            deleteLink(id);
-        });
-    });
-}
-
-// Handle create/update - FIXED VERSION
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const name = nameInput.value.trim();
-    const url = urlInput.value.trim();
-    
-    if (!name || !url) {
-        showToast('Please fill in both fields', 'warning');
-        return;
-    }
-    
-    // Format URL if missing protocol
-    let formattedUrl = url;
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-        formattedUrl = 'https://' + formattedUrl;
-    }
-    
-    // Validate URL
-    if (!isValidUrl(formattedUrl)) {
-        showToast('Please enter a valid URL (e.g., https://example.com)', 'error');
-        return;
-    }
-    
-    const payload = { 
-        name: name,
-        url: formattedUrl
-    };
-    
-    try {
-        // Disable form only (not entire UI)
-        disableForm(true);
-        
-        let response;
-        
-        if (editingId) {
-            // Update existing link
-            console.log(`🔄 Updating link ${editingId}`, payload);
-            
-            response = await fetch(`${API_BASE}/${editingId}`, {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-            
-            if (response.ok) {
-                editedCount++;
-                editedCountEl.textContent = editedCount;
-                localStorage.setItem('editedCount', editedCount);
-                showToast('✅ Link updated successfully!', 'success');
-            }
-        } else {
-            // Create new link
-            console.log('📝 Creating new link', payload);
-            
-            response = await fetch(API_BASE, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-            
-            if (response.ok) {
-                showToast('✅ Link added successfully!', 'success');
-            }
-        }
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Request failed with status ${response.status}: ${errorText}`);
-        }
-        
-        // Reset form
-        resetForm();
-        
-        // Refresh the links list
-        await fetchLinks();
-        
-    } catch (error) {
-        console.error('Error saving link:', error);
-        
-        if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
-            showToast('Cannot connect to server. Please try again later.', 'error');
-        } else {
-            showToast(`Error: ${error.message}`, 'error');
-        }
-        
-        // Re-enable form even on error
-        disableForm(false);
-        
-    } finally {
-        // Always re-enable form after operation
-        disableForm(false);
-    }
-});
-
-// NEW FUNCTION: Disable/enable only the form
-function disableForm(disable) {
-    const formElements = [nameInput, urlInput, saveBtn, cancelEditBtn];
-    
-    formElements.forEach(element => {
-        if (element) {
-            element.disabled = disable;
-            element.style.opacity = disable ? '0.7' : '1';
-            element.style.cursor = disable ? 'not-allowed' : '';
-        }
-    });
-    
-    // Update save button text based on state
-    if (disable) {
-        saveBtn.innerHTML = editingId 
-            ? '<i class="fas fa-spinner fa-spin"></i> Updating...' 
-            : '<i class="fas fa-spinner fa-spin"></i> Saving...';
-    } else {
-        saveBtn.innerHTML = editingId 
-            ? '<i class="fas fa-save"></i> Update Link' 
-            : '<i class="fas fa-save"></i> Save Link';
-    }
-}
-
-// Copy link to clipboard
-async function handleCopy(id) {
-    try {
-        const link = allLinks.find(l => l._id === id);
-        if (!link) {
-            showToast('Link not found', 'error');
-            return;
-        }
-        
-        await navigator.clipboard.writeText(link.url);
-        
-        // Visual feedback
-        const copyBtn = document.querySelector(`.copy-btn[data-id="${id}"]`);
-        if (copyBtn) {
-            const originalHTML = copyBtn.innerHTML;
-            copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-            copyBtn.style.background = 'var(--success)';
-            copyBtn.style.color = 'white';
-            
-            // Revert button after 1.5 seconds
-            setTimeout(() => {
-                copyBtn.innerHTML = originalHTML;
-                copyBtn.style.background = '';
-                copyBtn.style.color = '';
-            }, 1500);
-        }
-        
-        // Update counter
-        copiedCount++;
-        copiedCountEl.textContent = copiedCount;
-        localStorage.setItem('copiedCount', copiedCount);
-        
-        showToast('📋 Link copied to clipboard!', 'success');
-    } catch (error) {
-        console.error('Copy failed:', error);
-        
-        // Fallback for older browsers
-        const link = allLinks.find(l => l._id === id);
-        if (link) {
-            const textArea = document.createElement('textarea');
-            textArea.value = link.url;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            
-            showToast('📋 Link copied to clipboard!', 'success');
-            
-            // Update counter
-            copiedCount++;
-            copiedCountEl.textContent = copiedCount;
-            localStorage.setItem('copiedCount', copiedCount);
-        } else {
-            showToast('Failed to copy link', 'error');
-        }
-    }
-}
-
-// Start editing a link
-function startEdit(id) {
-    const link = allLinks.find(l => l._id === id);
-    if (!link) {
-        showToast('Link not found', 'error');
-        return;
-    }
-    
-    editingId = id;
-    nameInput.value = link.name;
-    urlInput.value = link.url;
-    
-    // Update UI for edit mode
-    saveBtn.innerHTML = '<i class="fas fa-save"></i> Update Link';
-    cancelEditBtn.classList.remove('hidden');
-    formTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Link';
-    
-    // Scroll to form
-    document.querySelector('.form-container').scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start'
-    });
-    
-    // Focus on name input
-    nameInput.focus();
-}
-
-// Delete a link
-async function deleteLink(id) {
-    const link = allLinks.find(l => l._id === id);
-    if (!link) {
-        showToast('Link not found', 'error');
-        return;
-    }
-    
-    if (!confirm(`Are you sure you want to delete "${link.name}"?`)) {
-        return;
-    }
-    
-    try {
-        // Only disable action buttons, not the entire UI
-        const actionButtons = document.querySelectorAll('.action-btn');
-        actionButtons.forEach(btn => {
-            btn.disabled = true;
-            btn.style.opacity = '0.6';
-        });
-        
-        console.log(`🗑️ Deleting link ${id}`);
-        
-        const response = await fetch(`${API_BASE}/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Delete failed: ${response.status} ${errorText}`);
-        }
-        
-        showToast('🗑️ Link deleted successfully!', 'success');
-        await fetchLinks();
-        
-    } catch (error) {
-        console.error('Error deleting link:', error);
-        
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            showToast('Cannot connect to server. Please try again later.', 'error');
-        } else {
-            showToast(`Error: ${error.message}`, 'error');
-        }
-        
-    } finally {
-        // Re-enable action buttons
-        const actionButtons = document.querySelectorAll('.action-btn');
-        actionButtons.forEach(btn => {
-            btn.disabled = false;
-            btn.style.opacity = '1';
-        });
-    }
-}
-
-// Reset form to add mode
-function resetForm() {
-    form.reset();
-    editingId = null;
-    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Link';
-    cancelEditBtn.classList.add('hidden');
-    formTitle.innerHTML = '<i class="fas fa-plus-circle"></i> Add New Link';
-    nameInput.focus();
-}
-
-// Cancel edit button handler
-cancelEditBtn.addEventListener('click', resetForm);
-
-// Search functionality
-searchInput.addEventListener('input', function() {
-    const searchTerm = this.value.toLowerCase().trim();
-    
-    if (!searchTerm) {
-        renderLinks(allLinks);
-        return;
-    }
-    
-    const filteredLinks = allLinks.filter(link => 
-        link.name.toLowerCase().includes(searchTerm) || 
-        link.url.toLowerCase().includes(searchTerm)
-    );
-    
-    renderLinks(filteredLinks);
-});
-
-// Update statistics
-function updateStats() {
-    totalLinksEl.textContent = allLinks.length;
-}
-
-// Validate URL format
 function isValidUrl(string) {
     try {
         new URL(string);
@@ -634,7 +882,27 @@ function isValidUrl(string) {
     }
 }
 
-// Show toast notification
+function disableForm(form, disable) {
+    const elements = form.querySelectorAll('input, button, textarea, select');
+    
+    elements.forEach(element => {
+        element.disabled = disable;
+        element.style.opacity = disable ? '0.7' : '1';
+        element.style.cursor = disable ? 'not-allowed' : '';
+    });
+    
+    // Update submit button text
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn && disable) {
+        const originalHTML = submitBtn.innerHTML;
+        submitBtn.dataset.originalHTML = originalHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    } else if (submitBtn && !disable && submitBtn.dataset.originalHTML) {
+        submitBtn.innerHTML = submitBtn.dataset.originalHTML;
+        delete submitBtn.dataset.originalHTML;
+    }
+}
+
 function showToast(message, type = 'success') {
     // Remove existing toast
     const existingToast = document.querySelector('.toast');
@@ -646,7 +914,6 @@ function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
-    // Set icon based on type
     let icon = 'check-circle';
     if (type === 'error') icon = 'exclamation-circle';
     if (type === 'warning') icon = 'exclamation-triangle';
@@ -659,10 +926,8 @@ function showToast(message, type = 'success') {
     
     document.body.appendChild(toast);
     
-    // Show toast with animation
     setTimeout(() => toast.classList.add('show'), 10);
     
-    // Hide after appropriate time
     const duration = type === 'error' ? 5000 : 3000;
     setTimeout(() => {
         toast.classList.remove('show');
@@ -674,97 +939,19 @@ function showToast(message, type = 'success') {
     }, duration);
 }
 
-// Add CSS for loading states
-const style = document.createElement('style');
-style.textContent = `
-    /* Loading spinner for table */
-    .loading-state {
-        padding: 60px 20px !important;
-        text-align: center;
+// Modal event listeners
+closeFolderModal.addEventListener('click', hideEditFolderModal);
+cancelEditFolderBtn.addEventListener('click', hideEditFolderModal);
+
+closeLinkModal.addEventListener('click', hideEditLinkModal);
+cancelEditLinkBtn.addEventListener('click', hideEditLinkModal);
+
+// Close modals on outside click
+window.addEventListener('click', (e) => {
+    if (e.target === folderModal) {
+        hideEditFolderModal();
     }
-    
-    .spinner-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 15px;
+    if (e.target === linkModal) {
+        hideEditLinkModal();
     }
-    
-    .loading-spinner {
-        border: 4px solid rgba(79, 70, 229, 0.1);
-        border-radius: 50%;
-        border-top: 4px solid var(--primary);
-        width: 50px;
-        height: 50px;
-        animation: spin 1s linear infinite;
-    }
-    
-    .loading-state p {
-        color: var(--text-light);
-        font-size: 1rem;
-        margin: 0;
-    }
-    
-    /* Error state */
-    .error-state {
-        padding: 60px 20px !important;
-        text-align: center;
-    }
-    
-    .error-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 15px;
-        max-width: 400px;
-        margin: 0 auto;
-    }
-    
-    .error-container i {
-        font-size: 3rem;
-        color: var(--warning);
-        margin-bottom: 10px;
-    }
-    
-    .error-container h3 {
-        color: var(--text);
-        font-size: 1.3rem;
-        margin: 0;
-    }
-    
-    .error-container p {
-        color: var(--text-light);
-        margin: 0 0 20px 0;
-        line-height: 1.5;
-    }
-    
-    /* Spinner animation */
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    
-    .fa-spinner {
-        animation: fa-spin 1s linear infinite;
-        margin-right: 8px;
-    }
-    
-    @keyframes fa-spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    
-    /* Disabled states */
-    .form-input:disabled,
-    .btn:disabled {
-        background-color: var(--surface);
-        cursor: not-allowed;
-        opacity: 0.7;
-    }
-    
-    .search-input:disabled {
-        background-color: var(--surface);
-        cursor: not-allowed;
-    }
-`;
-document.head.appendChild(style);
+});

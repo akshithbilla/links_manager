@@ -12,36 +12,69 @@
         <!-- Header -->
         <header class="app-header">
             <div class="header-left">
-                <h1><i class="fas fa-link"></i> QuickLink Vault</h1>
-                <p>Manage and organize your important links professionally</p>
+                <h1><i class="fas fa-folder-tree"></i> QuickLink Vault</h1>
+                <p>Organize your links with folders and categories</p>
             </div>
             <div class="stats-card">
                 <div class="stat">
+                    <span class="stat-value" id="total-folders">0</span>
+                    <span class="stat-label">Folders</span>
+                </div>
+                <div class="stat">
                     <span class="stat-value" id="total-links">0</span>
-                    <span class="stat-label">Total Links</span>
+                    <span class="stat-label">Links</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value" id="copied-count">0</span>
                     <span class="stat-label">Copied</span>
                 </div>
-                <div class="stat">
-                    <span class="stat-value" id="edited-count">0</span>
-                    <span class="stat-label">Edited</span>
-                </div>
             </div>
         </header>
 
-        <!-- Add/Edit Link Form -->
-        <section class="form-container">
-            <h2 class="form-title" id="form-title">
-                <i class="fas fa-plus-circle"></i> Add New Link
+        <!-- Folder/Category Creation Form -->
+        <section class="form-container folder-form-container">
+            <h2 class="form-title"><i class="fas fa-folder-plus"></i> Create New Folder</h2>
+            <form id="folder-form" class="folder-form">
+                <div class="form-field">
+                    <label for="folder-name"><i class="fas fa-tag"></i> Folder Name</label>
+                    <input 
+                        type="text" 
+                        id="folder-name" 
+                        class="form-input"
+                        placeholder="e.g. Social Media, Projects, Work, Personal" 
+                        required 
+                    />
+                </div>
+
+                <div class="form-field">
+                    <label for="folder-description"><i class="fas fa-align-left"></i> Description (Optional)</label>
+                    <input 
+                        type="text" 
+                        id="folder-description" 
+                        class="form-input"
+                        placeholder="Brief description of this folder" 
+                    />
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" id="save-folder-btn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Create Folder
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Link Creation Form (Initially Hidden) -->
+        <section class="form-container link-form-container hidden">
+            <h2 class="form-title" id="link-form-title">
+                <i class="fas fa-link"></i> Add Link to <span id="current-folder-name">Folder</span>
             </h2>
             <form id="link-form" class="link-form">
                 <div class="form-field">
-                    <label for="name"><i class="fas fa-tag"></i> Label</label>
+                    <label for="link-name"><i class="fas fa-tag"></i> Link Label</label>
                     <input 
                         type="text" 
-                        id="name" 
+                        id="link-name" 
                         class="form-input"
                         placeholder="e.g. Portfolio, GitHub, LinkedIn" 
                         required 
@@ -49,10 +82,10 @@
                 </div>
 
                 <div class="form-field">
-                    <label for="url"><i class="fas fa-link"></i> URL</label>
+                    <label for="link-url"><i class="fas fa-link"></i> URL</label>
                     <input 
                         type="url" 
-                        id="url" 
+                        id="link-url" 
                         class="form-input"
                         placeholder="https://example.com" 
                         required 
@@ -60,56 +93,95 @@
                 </div>
 
                 <div class="form-actions">
-                    <button type="submit" id="save-btn" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Link
+                    <button type="submit" id="save-link-btn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Link
                     </button>
-                    <button type="button" id="cancel-edit-btn" class="btn btn-secondary hidden">
-                        <i class="fas fa-times"></i> Cancel Edit
+                    <button type="button" id="cancel-link-btn" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancel
                     </button>
                 </div>
             </form>
         </section>
 
-        <!-- Links Table -->
-        <section class="table-container">
+        <!-- Folders List -->
+        <section class="folders-container">
             <div class="table-header">
-                <h2><i class="fas fa-list"></i> Saved Links</h2>
+                <h2><i class="fas fa-folder"></i> Your Folders</h2>
                 <div class="table-controls">
                     <div class="search-box">
                         <i class="fas fa-search"></i>
-                        <input type="text" class="search-input" placeholder="Search links..." id="search-input">
+                        <input type="text" class="search-input" placeholder="Search folders..." id="folder-search-input">
                     </div>
                 </div>
             </div>
             
-            <div class="table-wrapper">
-                <table class="links-table">
-                    <thead>
-                        <tr>
-                            <th>Label</th>
-                            <th>URL</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="links-table-body">
-                        <!-- Empty state initially -->
-                        <tr id="empty-row">
-                            <td colspan="4" class="empty-state">
-                                <i class="fas fa-link"></i>
-                                <h3>No links saved yet</h3>
-                                <p>Add your first link using the form above</p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="folders-grid" id="folders-container">
+                <!-- Folders will be dynamically added here -->
+                <div class="loading-state">
+                    <div class="spinner-container">
+                        <div class="loading-spinner"></div>
+                        <p>Loading folders...</p>
+                    </div>
+                </div>
             </div>
         </section>
 
         <!-- Footer -->
         <footer class="app-footer">
-            <p>QuickLink Vault &copy; <span id="current-year">2023</span> | Professional Link Management</p>
+            <p>QuickLink Vault &copy; <span id="current-year">2023</span> | Organized Link Management</p>
         </footer>
+    </div>
+
+    <!-- Folder Modal for Editing -->
+    <div class="modal hidden" id="folder-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Edit Folder</h3>
+                <button class="modal-close" id="close-folder-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-folder-form">
+                    <div class="form-field">
+                        <label for="edit-folder-name">Folder Name</label>
+                        <input type="text" id="edit-folder-name" class="form-input" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="edit-folder-description">Description</label>
+                        <input type="text" id="edit-folder-description" class="form-input">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Update Folder</button>
+                        <button type="button" class="btn btn-secondary" id="cancel-edit-folder">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link Modal for Editing -->
+    <div class="modal hidden" id="link-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Edit Link</h3>
+                <button class="modal-close" id="close-link-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-link-form">
+                    <div class="form-field">
+                        <label for="edit-link-name">Link Label</label>
+                        <input type="text" id="edit-link-name" class="form-input" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="edit-link-url">URL</label>
+                        <input type="url" id="edit-link-url" class="form-input" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Update Link</button>
+                        <button type="button" class="btn btn-secondary" id="cancel-edit-link">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
