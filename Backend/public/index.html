@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>QuickLink Vault</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <h1>QuickLink Vault</h1>
+
+      <form id="link-form">
+        <div class="field">
+          <label for="name">Label</label>
+          <input
+            type="text"
+            id="name"
+            placeholder="e.g. Portfolio, GitHub, LinkedIn"
+            required
+          />
+        </div>
+
+        <div class="field">
+          <label for="url">URL</label>
+          <input
+            type="url"
+            id="url"
+            placeholder="https://example.com"
+            required
+          />
+        </div>
+
+        <button type="submit" id="save-btn">Save Link</button>
+        <button type="button" id="cancel-edit-btn" class="secondary hidden">
+          Cancel Edit
+        </button>
+      </form>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>URL</th>
+            <th>Copy</th>
+            <th>Edit</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody id="links-table-body">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
