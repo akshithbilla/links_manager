@@ -23,7 +23,6 @@ let editedCount = 0;
 window.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 QuickLink Vault Frontend Initializing...');
     console.log('🌐 Backend URL:', API_BASE);
-    console.log('🔗 Frontend URL:', window.location.origin);
     
     currentYearEl.textContent = new Date().getFullYear();
     
@@ -63,14 +62,11 @@ async function initializeApp() {
 // Check backend health
 async function checkBackendHealth() {
     try {
-        // Try the health endpoint first
-        const healthUrl = 'https://links-manager-ph6d.onrender.com/api/health';
-        console.log('Checking backend health at:', healthUrl);
-        
+        // Try the main endpoint with timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        const response = await fetch(healthUrl, {
+        const response = await fetch(API_BASE, {
             signal: controller.signal,
             method: 'GET',
             headers: { 'Accept': 'application/json' },
@@ -79,13 +75,7 @@ async function checkBackendHealth() {
         
         clearTimeout(timeoutId);
         
-        if (response.ok) {
-            const data = await response.json();
-            console.log('✅ Backend health check passed:', data);
-            return true;
-        }
-        
-        return false;
+        return response.ok;
         
     } catch (error) {
         console.warn('Backend health check failed:', error.message);
@@ -113,9 +103,7 @@ async function fetchLinks() {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Server response:', errorText);
-            throw new Error(`Server error: ${response.status} ${response.statusText}`);
+            throw new Error(`Server error: ${response.status}`);
         }
         
         allLinks = await response.json();
@@ -334,7 +322,7 @@ function addActionListeners() {
     });
 }
 
-// Handle create/update
+// Handle create/update - FIXED VERSION
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -364,7 +352,8 @@ form.addEventListener('submit', async (e) => {
     };
     
     try {
-        showLoading(true);
+        // Disable form only (not entire UI)
+        disableForm(true);
         
         let response;
         
@@ -410,8 +399,10 @@ form.addEventListener('submit', async (e) => {
             throw new Error(`Request failed with status ${response.status}: ${errorText}`);
         }
         
-        // Reset form and refresh list
+        // Reset form
         resetForm();
+        
+        // Refresh the links list
         await fetchLinks();
         
     } catch (error) {
@@ -423,9 +414,38 @@ form.addEventListener('submit', async (e) => {
             showToast(`Error: ${error.message}`, 'error');
         }
         
-        showLoading(false);
+        // Re-enable form even on error
+        disableForm(false);
+        
+    } finally {
+        // Always re-enable form after operation
+        disableForm(false);
     }
 });
+
+// NEW FUNCTION: Disable/enable only the form
+function disableForm(disable) {
+    const formElements = [nameInput, urlInput, saveBtn, cancelEditBtn];
+    
+    formElements.forEach(element => {
+        if (element) {
+            element.disabled = disable;
+            element.style.opacity = disable ? '0.7' : '1';
+            element.style.cursor = disable ? 'not-allowed' : '';
+        }
+    });
+    
+    // Update save button text based on state
+    if (disable) {
+        saveBtn.innerHTML = editingId 
+            ? '<i class="fas fa-spinner fa-spin"></i> Updating...' 
+            : '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    } else {
+        saveBtn.innerHTML = editingId 
+            ? '<i class="fas fa-save"></i> Update Link' 
+            : '<i class="fas fa-save"></i> Save Link';
+    }
+}
 
 // Copy link to clipboard
 async function handleCopy(id) {
@@ -525,7 +545,12 @@ async function deleteLink(id) {
     }
     
     try {
-        showLoading(true);
+        // Only disable action buttons, not the entire UI
+        const actionButtons = document.querySelectorAll('.action-btn');
+        actionButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+        });
         
         console.log(`🗑️ Deleting link ${id}`);
         
@@ -554,7 +579,13 @@ async function deleteLink(id) {
             showToast(`Error: ${error.message}`, 'error');
         }
         
-        showLoading(false);
+    } finally {
+        // Re-enable action buttons
+        const actionButtons = document.querySelectorAll('.action-btn');
+        actionButtons.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        });
     }
 }
 
@@ -643,56 +674,6 @@ function showToast(message, type = 'success') {
     }, duration);
 }
 
-// Show/hide loading state for form actions
-function showLoading(isLoading) {
-    const buttons = document.querySelectorAll('.btn, .action-btn');
-    const inputs = document.querySelectorAll('.form-input, .search-input');
-    const submitBtn = document.getElementById('save-btn');
-    
-    if (isLoading) {
-        // Show loading state on submit button
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-        submitBtn.disabled = true;
-        
-        // Disable other interactive elements
-        buttons.forEach(btn => {
-            if (btn !== submitBtn) {
-                btn.disabled = true;
-                btn.style.opacity = '0.6';
-                btn.style.cursor = 'not-allowed';
-            }
-        });
-        
-        inputs.forEach(input => {
-            input.disabled = true;
-            input.style.opacity = '0.6';
-            input.style.cursor = 'not-allowed';
-        });
-        
-    } else {
-        // Restore submit button
-        if (editingId) {
-            submitBtn.innerHTML = '<i class="fas fa-save"></i> Update Link';
-        } else {
-            submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Link';
-        }
-        submitBtn.disabled = false;
-        
-        // Enable other interactive elements
-        buttons.forEach(btn => {
-            btn.disabled = false;
-            btn.style.opacity = '';
-            btn.style.cursor = '';
-        });
-        
-        inputs.forEach(input => {
-            input.disabled = false;
-            input.style.opacity = '';
-            input.style.cursor = '';
-        });
-    }
-}
-
 // Add CSS for loading states
 const style = document.createElement('style');
 style.textContent = `
@@ -765,6 +746,7 @@ style.textContent = `
     
     .fa-spinner {
         animation: fa-spin 1s linear infinite;
+        margin-right: 8px;
     }
     
     @keyframes fa-spin {
@@ -772,7 +754,14 @@ style.textContent = `
         100% { transform: rotate(360deg); }
     }
     
-    /* Disabled search */
+    /* Disabled states */
+    .form-input:disabled,
+    .btn:disabled {
+        background-color: var(--surface);
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+    
     .search-input:disabled {
         background-color: var(--surface);
         cursor: not-allowed;
