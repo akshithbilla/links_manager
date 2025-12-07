@@ -7,12 +7,33 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-    origin: [
-        'https://aks-manager-links.vercel.app',
-        'http://localhost:3000',
-        'http://localhost:5000',
-        'http://localhost:8080'
-    ],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, Postman, or file:// protocol)
+        // When origin is null/undefined, it means the request is from file:// or same-origin
+        if (!origin || origin === 'null') {
+            return callback(null, true);
+        }
+        
+        const allowedOrigins = [
+            'https://aks-manager-links.vercel.app',
+            'http://localhost:3000',
+            'http://localhost:5000',
+            'http://localhost:8080',
+            'http://127.0.0.1:5000',
+            'http://127.0.0.1:8080'
+        ];
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            // In development, allow all origins for easier testing
+            if (process.env.NODE_ENV !== 'production') {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
@@ -24,6 +45,9 @@ app.use(cors(corsOptions));
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from public directory
+app.use(express.static('public'));
 
 // MongoDB connection
 const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/quicklinks';
@@ -337,8 +361,8 @@ app.delete('/api/links/:id', async (req, res) => {
     }
 });
 
-// Root endpoint
-app.get('/', (req, res) => {
+// API info endpoint (moved from root to avoid interfering with static file serving)
+app.get('/api', (req, res) => {
     res.json({
         message: 'QuickLink Vault API with Folders',
         version: '2.0.0',
@@ -350,20 +374,26 @@ app.get('/', (req, res) => {
     });
 });
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({
-        error: 'Endpoint not found',
-        availableEndpoints: [
-            'GET /api/folders',
-            'POST /api/folders',
-            'PUT /api/folders/:id',
-            'DELETE /api/folders/:id',
-            'POST /api/links',
-            'PUT /api/links/:id',
-            'DELETE /api/links/:id'
-        ]
-    });
+// 404 handler for API routes only
+app.use((req, res, next) => {
+    // Only handle 404 for API routes
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({
+            error: 'API endpoint not found',
+            availableEndpoints: [
+                'GET /api/health',
+                'GET /api/folders',
+                'POST /api/folders',
+                'PUT /api/folders/:id',
+                'DELETE /api/folders/:id',
+                'POST /api/links',
+                'PUT /api/links/:id',
+                'DELETE /api/links/:id'
+            ]
+        });
+    }
+    // For non-API routes, let static file handler or default 404 handle it
+    next();
 });
 
 // Start server

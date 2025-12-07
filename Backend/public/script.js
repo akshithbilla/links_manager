@@ -1,47 +1,38 @@
 const API_BASE = "http://localhost:5000/api";
 
 // DOM Elements
-const folderForm = document.getElementById("folder-form");
-const folderNameInput = document.getElementById("folder-name");
-const folderDescInput = document.getElementById("folder-description");
 const linkForm = document.getElementById("link-form");
-const linkNameInput = document.getElementById("link-name");
-const linkUrlInput = document.getElementById("link-url");
-const linkFormContainer = document.querySelector(".link-form-container");
-const currentFolderNameSpan = document.getElementById("current-folder-name");
-const foldersContainer = document.getElementById("folders-container");
-const searchInput = document.getElementById("folder-search-input");
-const totalFoldersEl = document.getElementById('total-folders');
+const nameInput = document.getElementById("name");
+const urlInput = document.getElementById("url");
+const linksTableBody = document.getElementById("links-table-body");
+const searchInput = document.getElementById("search-input");
 const totalLinksEl = document.getElementById('total-links');
 const copiedCountEl = document.getElementById('copied-count');
+const editedCountEl = document.getElementById('edited-count');
 const currentYearEl = document.getElementById('current-year');
-const cancelLinkBtn = document.getElementById("cancel-link-btn");
+const cancelEditBtn = document.getElementById("cancel-edit-btn");
+const formTitle = document.getElementById("form-title");
+const saveBtn = document.getElementById("save-btn");
 
-// Modals
-const folderModal = document.getElementById("folder-modal");
-const linkModal = document.getElementById("link-modal");
-const closeFolderModal = document.getElementById("close-folder-modal");
-const closeLinkModal = document.getElementById("close-link-modal");
-const cancelEditFolderBtn = document.getElementById("cancel-edit-folder");
-const cancelEditLinkBtn = document.getElementById("cancel-edit-link");
-const editFolderForm = document.getElementById("edit-folder-form");
-const editLinkForm = document.getElementById("edit-link-form");
-
-let currentFolderId = null;
-let allFolders = [];
+let allLinks = [];
+let defaultFolderId = null;
 let copiedCount = 0;
-let currentEditFolderId = null;
+let editedCount = 0;
 let currentEditLinkId = null;
 
 // Load on page load
 window.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 QuickLink Vault with Folders Initializing...');
+    console.log('🚀 QuickLink Vault Initializing...');
     
-    currentYearEl.textContent = new Date().getFullYear();
+    if (currentYearEl) {
+        currentYearEl.textContent = new Date().getFullYear();
+    }
     
     // Load stats from localStorage
     copiedCount = parseInt(localStorage.getItem('copiedCount')) || 0;
-    copiedCountEl.textContent = copiedCount;
+    editedCount = parseInt(localStorage.getItem('editedCount')) || 0;
+    if (copiedCountEl) copiedCountEl.textContent = copiedCount;
+    if (editedCountEl) editedCountEl.textContent = editedCount;
     
     // Initialize the app
     initializeApp();
@@ -55,7 +46,9 @@ async function initializeApp() {
         
         if (isBackendAlive) {
             console.log('✅ Backend is accessible');
-            await fetchFolders();
+            // Get or create default folder
+            await ensureDefaultFolder();
+            await fetchLinks();
         } else {
             console.error('❌ Backend is not accessible');
             showErrorState('Backend server is not responding. Please check the connection.');
@@ -89,10 +82,59 @@ async function checkBackendHealth() {
     }
 }
 
-// Fetch all folders with their links
-async function fetchFolders() {
+// Ensure default folder exists
+async function ensureDefaultFolder() {
     try {
-        showLoadingState();
+        const response = await fetch(`${API_BASE}/folders`, {
+            headers: { 'Accept': 'application/json' },
+            mode: 'cors'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
+        const folders = await response.json();
+        
+        // Find or create default folder
+        let defaultFolder = folders.find(f => f.name === 'General');
+        
+        if (!defaultFolder) {
+            // Create default folder
+            const createResponse = await fetch(`${API_BASE}/folders`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: 'General',
+                    description: 'Default folder for links'
+                })
+            });
+            
+            if (!createResponse.ok) {
+                throw new Error('Failed to create default folder');
+            }
+            
+            defaultFolder = await createResponse.json();
+        }
+        
+        defaultFolderId = defaultFolder._id;
+        console.log('✅ Default folder ready:', defaultFolderId);
+        
+    } catch (error) {
+        console.error('❌ Error ensuring default folder:', error);
+        throw error;
+    }
+}
+
+// Fetch all links
+async function fetchLinks() {
+    try {
+        if (!defaultFolderId) {
+            await ensureDefaultFolder();
+        }
         
         const response = await fetch(`${API_BASE}/folders`, {
             headers: { 'Accept': 'application/json' },
@@ -103,226 +145,105 @@ async function fetchFolders() {
             throw new Error(`Server error: ${response.status}`);
         }
         
-        allFolders = await response.json();
-        console.log(`✅ Loaded ${allFolders.length} folders`);
+        const folders = await response.json();
+        const defaultFolder = folders.find(f => f._id === defaultFolderId);
         
-        renderFolders();
-        updateStats();
-        
-        if (allFolders.length === 0) {
-            showEmptyState();
+        if (defaultFolder) {
+            allLinks = defaultFolder.links || [];
+            console.log(`✅ Loaded ${allLinks.length} links`);
+        } else {
+            allLinks = [];
         }
         
+        renderLinks();
+        updateStats();
+        
     } catch (error) {
-        console.error('❌ Error fetching folders:', error);
-        showErrorState('Cannot load folders. Please try again.');
+        console.error('❌ Error fetching links:', error);
+        showErrorState('Cannot load links. Please try again.');
     }
-}
-
-// Show loading state
-function showLoadingState() {
-    foldersContainer.innerHTML = `
-        <div class="loading-state">
-            <div class="spinner-container">
-                <div class="loading-spinner"></div>
-                <p>Loading folders...</p>
-            </div>
-        </div>
-    `;
 }
 
 // Show error state
 function showErrorState(message) {
-    foldersContainer.innerHTML = `
-        <div class="error-state">
-            <div class="error-container">
-                <i class="fas fa-exclamation-triangle"></i>
-                <h3>Connection Error</h3>
-                <p>${message}</p>
-                <button class="btn btn-secondary" id="retry-btn">
-                    <i class="fas fa-redo"></i> Retry
-                </button>
-            </div>
-        </div>
-    `;
-    
-    const retryBtn = document.getElementById('retry-btn');
-    if (retryBtn) {
-        retryBtn.addEventListener('click', () => {
-            showLoadingState();
-            initializeApp();
-        });
+    if (linksTableBody) {
+        linksTableBody.innerHTML = `
+            <tr>
+                <td colspan="4" class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Connection Error</h3>
+                    <p>${message}</p>
+                    <button class="btn btn-secondary" onclick="location.reload()">
+                        <i class="fas fa-redo"></i> Retry
+                    </button>
+                </td>
+            </tr>
+        `;
     }
 }
 
-// Show empty state
-function showEmptyState() {
-    foldersContainer.innerHTML = `
-        <div class="empty-state">
-            <i class="fas fa-folder-open"></i>
-            <h3>No folders yet</h3>
-            <p>Create your first folder to start organizing links!</p>
-        </div>
-    `;
-}
-
-// Render folders to the grid
-function renderFolders() {
-    if (!allFolders || allFolders.length === 0) {
-        showEmptyState();
+// Render links to table
+function renderLinks(filteredLinks = null) {
+    if (!linksTableBody) return;
+    
+    const linksToRender = filteredLinks || allLinks;
+    
+    if (!linksToRender || linksToRender.length === 0) {
+        linksTableBody.innerHTML = `
+            <tr id="empty-row">
+                <td colspan="4" class="empty-state">
+                    <i class="fas fa-link"></i>
+                    <h3>No links saved yet</h3>
+                    <p>Add your first link using the form above</p>
+                </td>
+            </tr>
+        `;
         return;
     }
     
-    foldersContainer.innerHTML = '';
-    
-    allFolders.forEach((folder) => {
-        const folderCard = document.createElement('div');
-        folderCard.className = 'folder-card';
-        folderCard.dataset.folderId = folder._id;
-        
-        const isExpanded = folder._id === currentFolderId;
-        if (isExpanded) {
-            folderCard.classList.add('expanded');
-        }
-        
-        folderCard.innerHTML = `
-            <div class="folder-header">
-                <div class="folder-info">
-                    <div class="folder-icon">
-                        <i class="fas fa-folder"></i>
-                    </div>
-                    <div class="folder-details">
-                        <h3>${escapeHtml(folder.name)}</h3>
-                        <p>${folder.description || 'No description'}</p>
-                    </div>
-                </div>
-                <div class="folder-stats">
-                    <span class="folder-count">${folder.links?.length || 0} links</span>
-                    <div class="folder-actions">
-                        <button class="action-btn add-link-btn" data-folder-id="${folder._id}" title="Add link to this folder">
-                            <i class="fas fa-plus"></i> Add Link
-                        </button>
-                        <button class="action-btn edit-folder-btn" data-folder-id="${folder._id}" title="Edit folder">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="action-btn delete-folder-btn" data-folder-id="${folder._id}" title="Delete folder">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="folder-content">
-                ${renderLinksList(folder.links || [], folder._id)}
-            </div>
-        `;
-        
-        foldersContainer.appendChild(folderCard);
-        
-        // Add event listeners
-        const folderHeader = folderCard.querySelector('.folder-header');
-        folderHeader.addEventListener('click', (e) => {
-            if (!e.target.closest('.folder-actions')) {
-                toggleFolder(folder._id);
-            }
+    linksTableBody.innerHTML = linksToRender.map(link => {
+        const createdDate = new Date(link.createdAt).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
         });
-    });
-    
-    // Add event listeners to action buttons
-    addFolderActionListeners();
-}
-
-// Render links list for a folder
-function renderLinksList(links, folderId) {
-    if (!links || links.length === 0) {
+        
         return `
-            <div class="empty-folder">
-                <i class="fas fa-link"></i>
-                <h4>No links in this folder</h4>
-                <p>Add your first link to get started</p>
-                <button class="btn btn-primary add-first-link-btn" data-folder-id="${folderId}">
-                    <i class="fas fa-plus"></i> Add First Link
-                </button>
-            </div>
-        `;
-    }
-    
-    const linksHtml = links.map(link => `
-        <div class="link-item" data-link-id="${link._id}">
-            <div class="link-info">
-                <div class="link-icon">
-                    <i class="${getDomainIcon(link.url)}"></i>
-                </div>
-                <div class="link-text">
-                    <h4>${escapeHtml(link.name)}</h4>
-                    <a href="${link.url}" target="_blank" rel="noopener noreferrer" title="${link.url}">
-                        ${truncateText(link.url, 40)}
+            <tr data-link-id="${link._id}">
+                <td>
+                    <div class="link-label">
+                        <i class="fas fa-tag"></i>
+                        ${escapeHtml(link.name)}
+                    </div>
+                </td>
+                <td>
+                    <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="link-url">
+                        <i class="${getDomainIcon(link.url)}"></i>
+                        ${truncateText(link.url, 50)}
                     </a>
-                </div>
-            </div>
-            <div class="link-actions">
-                <button class="action-btn copy-link-btn" data-link-id="${link._id}" title="Copy URL">
-                    <i class="fas fa-copy"></i> Copy
-                </button>
-                <button class="action-btn edit-link-btn" data-link-id="${link._id}" data-folder-id="${folderId}" title="Edit link">
-                    <i class="fas fa-edit"></i> Edit
-                </button>
-                <button class="action-btn delete-link-btn" data-link-id="${link._id}" data-folder-id="${folderId}" title="Delete link">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-            </div>
-        </div>
-    `).join('');
+                </td>
+                <td class="time-cell">${createdDate}</td>
+                <td class="actions-cell">
+                    <button class="action-btn copy-btn copy-link-btn" data-link-id="${link._id}" title="Copy URL">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                    <button class="action-btn edit-btn edit-link-btn" data-link-id="${link._id}" title="Edit link">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button class="action-btn delete-btn delete-link-btn" data-link-id="${link._id}" title="Delete link">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
     
-    return `<div class="links-list">${linksHtml}</div>`;
+    // Add event listeners
+    addLinkActionListeners();
 }
 
-// Toggle folder expansion
-function toggleFolder(folderId) {
-    const folderCard = document.querySelector(`.folder-card[data-folder-id="${folderId}"]`);
-    
-    if (folderCard.classList.contains('expanded')) {
-        folderCard.classList.remove('expanded');
-        currentFolderId = null;
-    } else {
-        // Close all other folders
-        document.querySelectorAll('.folder-card.expanded').forEach(card => {
-            card.classList.remove('expanded');
-        });
-        
-        folderCard.classList.add('expanded');
-        currentFolderId = folderId;
-    }
-}
-
-// Add event listeners to folder action buttons
-function addFolderActionListeners() {
-    // Add link buttons
-    document.querySelectorAll('.add-link-btn, .add-first-link-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const folderId = btn.getAttribute('data-folder-id');
-            showLinkForm(folderId);
-        });
-    });
-    
-    // Edit folder buttons
-    document.querySelectorAll('.edit-folder-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const folderId = btn.getAttribute('data-folder-id');
-            showEditFolderModal(folderId);
-        });
-    });
-    
-    // Delete folder buttons
-    document.querySelectorAll('.delete-folder-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const folderId = btn.getAttribute('data-folder-id');
-            deleteFolder(folderId);
-        });
-    });
-    
+// Add event listeners to action buttons
+function addLinkActionListeners() {
     // Copy link buttons
     document.querySelectorAll('.copy-link-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -335,8 +256,7 @@ function addFolderActionListeners() {
     document.querySelectorAll('.edit-link-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const linkId = btn.getAttribute('data-link-id');
-            const folderId = btn.getAttribute('data-folder-id');
-            showEditLinkModal(linkId, folderId);
+            editLink(linkId);
         });
     });
     
@@ -344,333 +264,156 @@ function addFolderActionListeners() {
     document.querySelectorAll('.delete-link-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const linkId = btn.getAttribute('data-link-id');
-            const folderId = btn.getAttribute('data-folder-id');
-            deleteLink(linkId, folderId);
+            deleteLink(linkId);
         });
     });
 }
 
-// Show link form for a specific folder
-function showLinkForm(folderId) {
-    const folder = allFolders.find(f => f._id === folderId);
-    if (!folder) return;
-    
-    currentFolderId = folderId;
-    currentFolderNameSpan.textContent = folder.name;
-    
-    // Reset form
-    linkNameInput.value = '';
-    linkUrlInput.value = '';
-    
-    // Show form
-    linkFormContainer.classList.remove('hidden');
-    
-    // Scroll to form
-    linkFormContainer.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start'
+// Handle link form submission
+if (linkForm) {
+    linkForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = nameInput.value.trim();
+        const url = urlInput.value.trim();
+        
+        if (!name || !url) {
+            showToast('Label and URL are required', 'warning');
+            return;
+        }
+        
+        // Format URL if missing protocol
+        let formattedUrl = url;
+        if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+            formattedUrl = 'https://' + formattedUrl;
+        }
+        
+        // Validate URL
+        if (!isValidUrl(formattedUrl)) {
+            showToast('Please enter a valid URL', 'error');
+            return;
+        }
+        
+        // Ensure default folder exists
+        if (!defaultFolderId) {
+            try {
+                await ensureDefaultFolder();
+            } catch (error) {
+                showToast('Failed to initialize. Please refresh the page.', 'error');
+                return;
+            }
+        }
+        
+        const payload = { 
+            name: name,
+            url: formattedUrl,
+            folderId: defaultFolderId
+        };
+        
+        try {
+            disableForm(linkForm, true);
+            
+            let response;
+            if (currentEditLinkId) {
+                // Update existing link
+                response = await fetch(`${API_BASE}/links/${currentEditLinkId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        url: formattedUrl
+                    })
+                });
+            } else {
+                // Create new link
+                response = await fetch(`${API_BASE}/links`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+            }
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Request failed: ${errorText}`);
+            }
+            
+            showToast(currentEditLinkId ? '✅ Link updated successfully!' : '✅ Link added successfully!', 'success');
+            
+            // Update edited count if editing
+            if (currentEditLinkId) {
+                editedCount++;
+                if (editedCountEl) editedCountEl.textContent = editedCount;
+                localStorage.setItem('editedCount', editedCount);
+            }
+            
+            // Reset form
+            linkForm.reset();
+            cancelEdit();
+            
+            // Refresh links
+            await fetchLinks();
+            
+        } catch (error) {
+            console.error('Error saving link:', error);
+            showToast(`Error: ${error.message}`, 'error');
+            
+        } finally {
+            disableForm(linkForm, false);
+        }
     });
-    
-    // Focus on name input
-    linkNameInput.focus();
 }
 
-// Hide link form
-function hideLinkForm() {
-    linkFormContainer.classList.add('hidden');
-    currentFolderId = null;
+// Cancel edit mode
+function cancelEdit() {
+    currentEditLinkId = null;
+    if (nameInput) nameInput.value = '';
+    if (urlInput) urlInput.value = '';
+    if (cancelEditBtn) cancelEditBtn.classList.add('hidden');
+    if (formTitle) {
+        formTitle.innerHTML = '<i class="fas fa-plus-circle"></i> Add New Link';
+    }
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Link';
+    }
 }
 
-// Handle folder creation
-folderForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const name = folderNameInput.value.trim();
-    const description = folderDescInput.value.trim();
-    
-    if (!name) {
-        showToast('Folder name is required', 'warning');
-        return;
-    }
-    
-    const payload = { 
-        name: name,
-        description: description || ''
-    };
-    
-    try {
-        disableForm(folderForm, true);
-        
-        const response = await fetch(`${API_BASE}/folders`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Request failed: ${errorText}`);
-        }
-        
-        showToast('✅ Folder created successfully!', 'success');
-        folderForm.reset();
-        await fetchFolders();
-        
-    } catch (error) {
-        console.error('Error creating folder:', error);
-        showToast(`Error: ${error.message}`, 'error');
-        
-    } finally {
-        disableForm(folderForm, false);
-    }
-});
-
-// Handle link creation
-linkForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const name = linkNameInput.value.trim();
-    const url = linkUrlInput.value.trim();
-    
-    if (!name || !url) {
-        showToast('Link name and URL are required', 'warning');
-        return;
-    }
-    
-    // Format URL if missing protocol
-    let formattedUrl = url;
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-        formattedUrl = 'https://' + formattedUrl;
-    }
-    
-    // Validate URL
-    if (!isValidUrl(formattedUrl)) {
-        showToast('Please enter a valid URL', 'error');
-        return;
-    }
-    
-    const payload = { 
-        name: name,
-        url: formattedUrl,
-        folderId: currentFolderId
-    };
-    
-    try {
-        disableForm(linkForm, true);
-        
-        const response = await fetch(`${API_BASE}/links`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Request failed: ${errorText}`);
-        }
-        
-        showToast('✅ Link added successfully!', 'success');
-        hideLinkForm();
-        await fetchFolders();
-        
-    } catch (error) {
-        console.error('Error creating link:', error);
-        showToast(`Error: ${error.message}`, 'error');
-        
-    } finally {
-        disableForm(linkForm, false);
-    }
-});
-
-// Cancel link form
-cancelLinkBtn.addEventListener('click', hideLinkForm);
-
-// Show edit folder modal
-function showEditFolderModal(folderId) {
-    const folder = allFolders.find(f => f._id === folderId);
-    if (!folder) return;
-    
-    currentEditFolderId = folderId;
-    document.getElementById('edit-folder-name').value = folder.name;
-    document.getElementById('edit-folder-description').value = folder.description || '';
-    
-    folderModal.classList.add('active');
-}
-
-// Hide edit folder modal
-function hideEditFolderModal() {
-    folderModal.classList.remove('active');
-    currentEditFolderId = null;
-}
-
-// Show edit link modal
-function showEditLinkModal(linkId, folderId) {
-    const folder = allFolders.find(f => f._id === folderId);
-    if (!folder) return;
-    
-    const link = folder.links?.find(l => l._id === linkId);
+// Edit link
+function editLink(linkId) {
+    const link = allLinks.find(l => l._id === linkId);
     if (!link) return;
     
     currentEditLinkId = linkId;
-    document.getElementById('edit-link-name').value = link.name;
-    document.getElementById('edit-link-url').value = link.url;
-    
-    linkModal.classList.add('active');
-}
-
-// Hide edit link modal
-function hideEditLinkModal() {
-    linkModal.classList.remove('active');
-    currentEditLinkId = null;
-}
-
-// Handle edit folder form
-editFolderForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const name = document.getElementById('edit-folder-name').value.trim();
-    const description = document.getElementById('edit-folder-description').value.trim();
-    
-    if (!name) {
-        showToast('Folder name is required', 'warning');
-        return;
+    if (nameInput) nameInput.value = link.name;
+    if (urlInput) urlInput.value = link.url;
+    if (cancelEditBtn) cancelEditBtn.classList.remove('hidden');
+    if (formTitle) {
+        formTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Link';
+    }
+    if (saveBtn) {
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Update Link';
     }
     
-    const payload = { 
-        name: name,
-        description: description || ''
-    };
-    
-    try {
-        disableForm(editFolderForm, true);
-        
-        const response = await fetch(`${API_BASE}/folders/${currentEditFolderId}`, {
-            method: 'PUT',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload)
+    // Scroll to form
+    if (linkForm) {
+        linkForm.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
         });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Request failed: ${errorText}`);
-        }
-        
-        showToast('✅ Folder updated successfully!', 'success');
-        hideEditFolderModal();
-        await fetchFolders();
-        
-    } catch (error) {
-        console.error('Error updating folder:', error);
-        showToast(`Error: ${error.message}`, 'error');
-        
-    } finally {
-        disableForm(editFolderForm, false);
-    }
-});
-
-// Handle edit link form
-editLinkForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const name = document.getElementById('edit-link-name').value.trim();
-    const url = document.getElementById('edit-link-url').value.trim();
-    
-    if (!name || !url) {
-        showToast('Link name and URL are required', 'warning');
-        return;
     }
     
-    // Format URL if missing protocol
-    let formattedUrl = url;
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-        formattedUrl = 'https://' + formattedUrl;
-    }
-    
-    // Validate URL
-    if (!isValidUrl(formattedUrl)) {
-        showToast('Please enter a valid URL', 'error');
-        return;
-    }
-    
-    const payload = { 
-        name: name,
-        url: formattedUrl
-    };
-    
-    try {
-        disableForm(editLinkForm, true);
-        
-        const response = await fetch(`${API_BASE}/links/${currentEditLinkId}`, {
-            method: 'PUT',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Request failed: ${errorText}`);
-        }
-        
-        showToast('✅ Link updated successfully!', 'success');
-        hideEditLinkModal();
-        await fetchFolders();
-        
-    } catch (error) {
-        console.error('Error updating link:', error);
-        showToast(`Error: ${error.message}`, 'error');
-        
-    } finally {
-        disableForm(editLinkForm, false);
-    }
-});
-
-// Delete folder
-async function deleteFolder(folderId) {
-    const folder = allFolders.find(f => f._id === folderId);
-    if (!folder) return;
-    
-    if (!confirm(`Are you sure you want to delete "${folder.name}" and all its links?`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/folders/${folderId}`, {
-            method: 'DELETE',
-            headers: { 'Accept': 'application/json' }
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Delete failed: ${errorText}`);
-        }
-        
-        showToast('🗑️ Folder deleted successfully!', 'success');
-        await fetchFolders();
-        
-    } catch (error) {
-        console.error('Error deleting folder:', error);
-        showToast(`Error: ${error.message}`, 'error');
-    }
+    if (nameInput) nameInput.focus();
 }
 
 // Delete link
-async function deleteLink(linkId, folderId) {
-    const folder = allFolders.find(f => f._id === folderId);
-    if (!folder) return;
-    
-    const link = folder.links?.find(l => l._id === linkId);
+async function deleteLink(linkId) {
+    const link = allLinks.find(l => l._id === linkId);
     if (!link) return;
     
     if (!confirm(`Are you sure you want to delete "${link.name}"?`)) {
@@ -689,7 +432,7 @@ async function deleteLink(linkId, folderId) {
         }
         
         showToast('🗑️ Link deleted successfully!', 'success');
-        await fetchFolders();
+        await fetchLinks();
         
     } catch (error) {
         console.error('Error deleting link:', error);
@@ -700,22 +443,14 @@ async function deleteLink(linkId, folderId) {
 // Copy link to clipboard
 async function copyLink(linkId) {
     try {
-        // Find the link in all folders
-        let targetLink = null;
-        for (const folder of allFolders) {
-            const link = folder.links?.find(l => l._id === linkId);
-            if (link) {
-                targetLink = link;
-                break;
-            }
-        }
+        const link = allLinks.find(l => l._id === linkId);
         
-        if (!targetLink) {
+        if (!link) {
             showToast('Link not found', 'error');
             return;
         }
         
-        await navigator.clipboard.writeText(targetLink.url);
+        await navigator.clipboard.writeText(link.url);
         
         // Visual feedback
         const copyBtn = document.querySelector(`.copy-link-btn[data-link-id="${linkId}"]`);
@@ -734,7 +469,7 @@ async function copyLink(linkId) {
         
         // Update counter
         copiedCount++;
-        copiedCountEl.textContent = copiedCount;
+        if (copiedCountEl) copiedCountEl.textContent = copiedCount;
         localStorage.setItem('copiedCount', copiedCount);
         
         showToast('📋 Link copied to clipboard!', 'success');
@@ -746,99 +481,33 @@ async function copyLink(linkId) {
 
 // Update statistics
 function updateStats() {
-    totalFoldersEl.textContent = allFolders.length;
-    
-    let totalLinks = 0;
-    allFolders.forEach(folder => {
-        totalLinks += folder.links?.length || 0;
-    });
-    totalLinksEl.textContent = totalLinks;
+    if (totalLinksEl) {
+        totalLinksEl.textContent = allLinks.length;
+    }
 }
 
 // Search functionality
-searchInput.addEventListener('input', function() {
-    const searchTerm = this.value.toLowerCase().trim();
-    
-    if (!searchTerm) {
-        renderFolders();
-        return;
-    }
-    
-    const filteredFolders = allFolders.filter(folder => 
-        folder.name.toLowerCase().includes(searchTerm) ||
-        folder.description?.toLowerCase().includes(searchTerm) ||
-        folder.links?.some(link => 
+if (searchInput) {
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        
+        if (!searchTerm) {
+            renderLinks();
+            return;
+        }
+        
+        const filteredLinks = allLinks.filter(link => 
             link.name.toLowerCase().includes(searchTerm) || 
             link.url.toLowerCase().includes(searchTerm)
-        )
-    );
-    
-    renderFilteredFolders(filteredFolders);
-});
-
-// Render filtered folders
-function renderFilteredFolders(folders) {
-    if (!folders || folders.length === 0) {
-        foldersContainer.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-search"></i>
-                <h3>No folders found</h3>
-                <p>Try a different search term</p>
-            </div>
-        `;
-        return;
-    }
-    
-    foldersContainer.innerHTML = '';
-    
-    folders.forEach((folder) => {
-        const folderCard = document.createElement('div');
-        folderCard.className = 'folder-card';
-        folderCard.dataset.folderId = folder._id;
+        );
         
-        folderCard.innerHTML = `
-            <div class="folder-header">
-                <div class="folder-info">
-                    <div class="folder-icon">
-                        <i class="fas fa-folder"></i>
-                    </div>
-                    <div class="folder-details">
-                        <h3>${escapeHtml(folder.name)}</h3>
-                        <p>${folder.description || 'No description'}</p>
-                    </div>
-                </div>
-                <div class="folder-stats">
-                    <span class="folder-count">${folder.links?.length || 0} links</span>
-                    <div class="folder-actions">
-                        <button class="action-btn add-link-btn" data-folder-id="${folder._id}" title="Add link to this folder">
-                            <i class="fas fa-plus"></i> Add Link
-                        </button>
-                        <button class="action-btn edit-folder-btn" data-folder-id="${folder._id}" title="Edit folder">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="action-btn delete-folder-btn" data-folder-id="${folder._id}" title="Delete folder">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="folder-content">
-                ${renderLinksList(folder.links || [], folder._id)}
-            </div>
-        `;
-        
-        foldersContainer.appendChild(folderCard);
-        
-        // Add event listeners
-        const folderHeader = folderCard.querySelector('.folder-header');
-        folderHeader.addEventListener('click', (e) => {
-            if (!e.target.closest('.folder-actions')) {
-                toggleFolder(folder._id);
-            }
-        });
+        renderLinks(filteredLinks);
     });
-    
-    addFolderActionListeners();
+}
+
+// Cancel edit button
+if (cancelEditBtn) {
+    cancelEditBtn.addEventListener('click', cancelEdit);
 }
 
 // Helper functions
@@ -883,6 +552,8 @@ function isValidUrl(string) {
 }
 
 function disableForm(form, disable) {
+    if (!form) return;
+    
     const elements = form.querySelectorAll('input, button, textarea, select');
     
     elements.forEach(element => {
@@ -938,20 +609,3 @@ function showToast(message, type = 'success') {
         }, 300);
     }, duration);
 }
-
-// Modal event listeners
-closeFolderModal.addEventListener('click', hideEditFolderModal);
-cancelEditFolderBtn.addEventListener('click', hideEditFolderModal);
-
-closeLinkModal.addEventListener('click', hideEditLinkModal);
-cancelEditLinkBtn.addEventListener('click', hideEditLinkModal);
-
-// Close modals on outside click
-window.addEventListener('click', (e) => {
-    if (e.target === folderModal) {
-        hideEditFolderModal();
-    }
-    if (e.target === linkModal) {
-        hideEditLinkModal();
-    }
-});
