@@ -1,4 +1,5 @@
-const API_BASE = "http://localhost:5000/api";
+// Import API configuration
+import { API_BASE } from "./config.js";
 
 // DOM Elements
 const linkForm = document.getElementById("link-form");
