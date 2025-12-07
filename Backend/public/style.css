@@ -360,6 +360,19 @@ body {
     text-decoration: underline;
 }
 
+.link-value {
+    color: var(--text);
+    word-break: break-word;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.link-value i {
+    color: var(--text-light);
+    font-size: 0.9rem;
+}
+
 .time-cell {
     color: var(--text-light);
     font-size: 0.9rem;

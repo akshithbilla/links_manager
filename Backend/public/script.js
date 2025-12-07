@@ -218,14 +218,20 @@ function renderLinks(filteredLinks = null) {
                     </div>
                 </td>
                 <td>
-                    <a href="${link.url}" target="_blank" rel="noopener noreferrer" class="link-url">
-                        <i class="${getDomainIcon(link.url)}"></i>
-                        ${truncateText(link.url, 50)}
-                    </a>
+                    ${isValidUrl(link.url) ? 
+                        `<a href="${link.url}" target="_blank" rel="noopener noreferrer" class="link-url">
+                            <i class="${getDomainIcon(link.url)}"></i>
+                            ${truncateText(link.url, 50)}
+                        </a>` :
+                        `<span class="link-value">
+                            <i class="fas fa-copy"></i>
+                            ${truncateText(escapeHtml(link.url), 50)}
+                        </span>`
+                    }
                 </td>
                 <td class="time-cell">${createdDate}</td>
                 <td class="actions-cell">
-                    <button class="action-btn copy-btn copy-link-btn" data-link-id="${link._id}" title="Copy URL">
+                    <button class="action-btn copy-btn copy-link-btn" data-link-id="${link._id}" title="Copy Value">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                     <button class="action-btn edit-btn edit-link-btn" data-link-id="${link._id}" title="Edit link">
@@ -279,21 +285,12 @@ if (linkForm) {
         const url = urlInput.value.trim();
         
         if (!name || !url) {
-            showToast('Label and URL are required', 'warning');
+            showToast('Label and Value are required', 'warning');
             return;
         }
         
-        // Format URL if missing protocol
-        let formattedUrl = url;
-        if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-            formattedUrl = 'https://' + formattedUrl;
-        }
-        
-        // Validate URL
-        if (!isValidUrl(formattedUrl)) {
-            showToast('Please enter a valid URL', 'error');
-            return;
-        }
+        // Accept any value (URL, email, phone, text, etc.) - no validation needed
+        const value = url.trim();
         
         // Ensure default folder exists
         if (!defaultFolderId) {
@@ -306,8 +303,8 @@ if (linkForm) {
         }
         
         const payload = { 
-            name: name,
-            url: formattedUrl,
+            name: name.trim(),
+            url: value,
             folderId: defaultFolderId
         };
         
@@ -324,8 +321,8 @@ if (linkForm) {
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
-                        name: name,
-                        url: formattedUrl
+                        name: name.trim(),
+                        url: url.trim()
                     })
                 });
             } else {

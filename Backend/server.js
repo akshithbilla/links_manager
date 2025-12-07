@@ -266,15 +266,10 @@ app.post('/api/links', async (req, res) => {
             return res.status(400).json({ error: 'Folder ID is required' });
         }
         
-        // Format URL
-        let formattedUrl = url.trim();
-        if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-            formattedUrl = 'https://' + formattedUrl;
-        }
-        
+        // Accept any value (URL, email, phone, text, etc.) - no formatting needed
         const newLink = new Link({
             name: name.trim(),
-            url: formattedUrl,
+            url: url.trim(),
             folder: folderId
         });
         
@@ -303,17 +298,12 @@ app.put('/api/links/:id', async (req, res) => {
             return res.status(400).json({ error: 'Invalid link ID format' });
         }
         
-        // Format URL
-        let formattedUrl = url.trim();
-        if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-            formattedUrl = 'https://' + formattedUrl;
-        }
-        
+        // Accept any value (URL, email, phone, text, etc.) - no formatting needed
         const updated = await Link.findByIdAndUpdate(
             id,
             { 
                 name: name.trim(),
-                url: formattedUrl,
+                url: url.trim(),
                 updatedAt: Date.now()
             },
             { new: true }
