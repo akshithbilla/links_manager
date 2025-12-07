@@ -20,6 +20,7 @@ let defaultFolderId = null;
 let copiedCount = 0;
 let editedCount = 0;
 let currentEditLinkId = null;
+let isLoadingLinks = false;
 
 // Load on page load
 window.addEventListener('DOMContentLoaded', () => {
@@ -49,7 +50,7 @@ async function initializeApp() {
             console.log('✅ Backend is accessible');
             // Get or create default folder
             await ensureDefaultFolder();
-            await fetchLinks();
+            await fetchLinks(true); // Show loading on initial load
         } else {
             console.error('❌ Backend is not accessible');
             showErrorState('Backend server is not responding. Please check the connection.');
@@ -131,8 +132,13 @@ async function ensureDefaultFolder() {
 }
 
 // Fetch all links
-async function fetchLinks() {
+async function fetchLinks(showLoading = false) {
     try {
+        if (showLoading) {
+            isLoadingLinks = true;
+            renderLinks(); // Show loading state
+        }
+        
         if (!defaultFolderId) {
             await ensureDefaultFolder();
         }
@@ -156,11 +162,13 @@ async function fetchLinks() {
             allLinks = [];
         }
         
+        isLoadingLinks = false;
         renderLinks();
         updateStats();
         
     } catch (error) {
         console.error('❌ Error fetching links:', error);
+        isLoadingLinks = false;
         showErrorState('Cannot load links. Please try again.');
     }
 }
@@ -186,6 +194,20 @@ function showErrorState(message) {
 // Render links to table
 function renderLinks(filteredLinks = null) {
     if (!linksTableBody) return;
+    
+    // Show loading state if links are being fetched
+    if (isLoadingLinks && (filteredLinks === null || filteredLinks === allLinks)) {
+        linksTableBody.innerHTML = `
+            <tr id="loading-row">
+                <td colspan="4" class="empty-state">
+                    <div class="spinner" style="margin-bottom: 20px;"></div>
+                    <h3>Loading links...</h3>
+                    <p>Please wait while we fetch your links</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
     
     const linksToRender = filteredLinks || allLinks;
     
@@ -355,8 +377,8 @@ if (linkForm) {
             linkForm.reset();
             cancelEdit();
             
-            // Refresh links
-            await fetchLinks();
+            // Refresh links (don't show loading for refresh after add/edit)
+            await fetchLinks(false);
             
         } catch (error) {
             console.error('Error saving link:', error);
@@ -430,7 +452,8 @@ async function deleteLink(linkId) {
         }
         
         showToast('🗑️ Link deleted successfully!', 'success');
-        await fetchLinks();
+        // Refresh links (don't show loading for refresh after delete)
+        await fetchLinks(false);
         
     } catch (error) {
         console.error('Error deleting link:', error);

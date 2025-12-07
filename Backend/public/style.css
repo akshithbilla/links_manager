@@ -571,9 +571,11 @@ body {
     border: 3px solid rgba(79, 70, 229, 0.1);
     border-radius: 50%;
     border-top: 3px solid var(--primary);
-    width: 30px;
-    height: 30px;
+    width: 40px;
+    height: 40px;
     animation: spin 1s linear infinite;
+    margin: 0 auto;
+    display: block;
 }
 
 @keyframes spin {
